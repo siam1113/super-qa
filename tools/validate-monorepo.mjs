@@ -13,7 +13,7 @@ for (const file of required) {
   if (statSync(file).size === 0) throw new Error(`${file} is empty`);
 }
 const web = readFileSync('apps/web/components/AppShell.tsx', 'utf8') + readFileSync('apps/web/components/screens.tsx', 'utf8');
-for (const token of ['RightInspector', 'CommandPalette', 'AICopilot', 'Healer', 'Knowledge Graph', 'Coverage Analysis', 'Data Setup']) {
+for (const token of ['RightInspector', 'CommandPalette', 'AICopilot', 'ActionModal', 'NotificationCenter', 'Healer', 'Knowledge Graph', 'Coverage Analysis', 'Data Setup', 'Saved Views', 'Bulk Edit', 'Generate Missing Test Cases']) {
   if (!web.includes(token)) throw new Error(`Missing UI token ${token}`);
 }
 const api = readFileSync('apps/api/src/modules/qa/schemas.ts', 'utf8') + readFileSync('apps/api/src/modules/qa/qa.controller.ts', 'utf8');

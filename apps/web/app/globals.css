@@ -86,3 +86,24 @@ pre { margin: 0; padding: 14px; border-radius: 12px; background: #06080d; color:
 .tree-static { font-family: ui-monospace, monospace; line-height: 1.8; color: var(--muted); }
 @media (max-width: 1200px) { .workspace { grid-template-columns: 240px 1fr; } .right-inspector { display: none; } .kpis { grid-template-columns: repeat(4, 1fr); } .two, .three, .run-grid, .code-grid, .dom-grid { grid-template-columns: 1fr; } }
 @media (max-width: 760px) { .workspace { grid-template-columns: 1fr; } .left-sidebar { display: none; } .kpis, .integrations { grid-template-columns: 1fr 1fr; } .topbar { overflow: auto; } .crumb { min-width: auto; } .global-search { display: none; } .page-header { display: grid; gap: 12px; } }
+.quick-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip-cloud { display: flex; flex-wrap: wrap; gap: 8px; max-height: 220px; overflow: auto; }
+.chip { border: 1px solid var(--border); background: var(--elev); color: var(--muted); border-radius: 999px; padding: 7px 10px; cursor: pointer; }
+.chip:hover { color: var(--text); border-color: var(--blue); }
+.tabs .active { color: var(--text); border-bottom: 2px solid var(--blue); }
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 12; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 999px; padding: 10px 14px; box-shadow: 0 16px 44px rgba(0,0,0,.24); }
+.modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.56); display: grid; place-items: center; z-index: 20; }
+.modal { width: min(560px, 92vw); border: 1px solid var(--border); border-radius: 18px; background: var(--surface); padding: 18px; box-shadow: 0 24px 80px rgba(0,0,0,.5); }
+.modal > button:first-child, .copilot-panel > button:first-child { float: right; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 14px 0; }
+.form-grid input, .form-grid select, .copilot-panel textarea { border: 1px solid var(--border); background: var(--elev); color: var(--text); border-radius: 10px; padding: 10px; }
+.copilot-panel, .notifications-drawer { position: fixed; right: 24px; border: 1px solid var(--border); background: var(--surface); border-radius: 18px; padding: 16px; z-index: 11; box-shadow: 0 24px 80px rgba(0,0,0,.36); }
+.copilot-panel { bottom: 78px; width: 390px; }
+.notifications-drawer { top: 116px; width: 340px; }
+.copilot-panel textarea { width: 100%; min-height: 100px; resize: vertical; }
+.state-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.state-grid > div { border: 1px solid var(--border); border-radius: 12px; padding: 14px; min-height: 70px; }
+.empty-state { color: var(--muted); } .loading-state { color: var(--cyan); background: linear-gradient(90deg, transparent, rgba(255,255,255,.06), transparent); } .success-state { color: var(--green); } .error-state { color: var(--red); }
+.shortcut-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 12px; }
+.shortcut-grid span { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+@media (max-width: 760px) { .form-grid, .state-grid, .shortcut-grid { grid-template-columns: 1fr; } .copilot-panel, .notifications-drawer { left: 16px; right: 16px; width: auto; } }

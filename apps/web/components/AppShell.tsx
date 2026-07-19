@@ -29,7 +29,7 @@ export function AppShell({ initialWorkspace }: { initialWorkspace: WorkspaceSeed
   const screenProps = useMemo(() => ({ data: initialWorkspace, setPage, setSelected, setModal, setToast }), [initialWorkspace]);
   return <div className={`app-shell ${theme}`} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') setCommandOpen(true); }}>
     <header className="topbar">
-      <div className="crumb">Workspace / {pageTitles[page]}</div>
+      <div className="crumb">Workspace / {pageTitles[page]} / {initialWorkspace.source === 'api' ? 'Live API' : 'Seed fallback'}</div>
       <button className="global-search" onClick={() => setCommandOpen(true)}>Search everything <kbd>Ctrl K</kbd></button>
       <button className="btn primary" onClick={() => { setModal('Run Suite'); setToast('Run configuration opened'); }}>Run</button><button className="btn" onClick={() => setNotificationsOpen(!notificationsOpen)}>Notifications</button><button className="btn" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? 'Light' : 'Dark'}</button><div className="avatar">MC</div>
     </header>

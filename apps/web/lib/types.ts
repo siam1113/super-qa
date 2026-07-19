@@ -4,4 +4,4 @@ export type TestCase = { id:string; title:string; priority:string; automation:st
 export type Execution = { testName:string; flow:string; browser:string; environment:string; status:string; duration:string; retry:number; confidence:number; owner:string };
 export type HealingSuggestion = { issue:string; affectedTests:number; locator:string; suggestedLocator:string; confidence:number; risk:string; owner:string };
 export type Integration = { name:string; status:'Connected'|'Warning'|'Disconnected'; lastSync:string; permissions:string };
-export type WorkspaceSeed = { executions:Execution[]; testCases:TestCase[]; healing:HealingSuggestion[]; integrations:Integration[] };
+export type WorkspaceSeed = { executions:Execution[]; testCases:TestCase[]; healing:HealingSuggestion[]; integrations:Integration[]; source?: 'api' | 'seed' };

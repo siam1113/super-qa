@@ -1,3 +1,6 @@
 import { AppShell } from '../components/AppShell';
-import { seedWorkspace } from '../lib/seed-data';
-export default function HomePage() { return <AppShell initialWorkspace={seedWorkspace} />; }
+import { loadWorkspace } from '../lib/load-workspace';
+export default async function HomePage() {
+  const workspace = await loadWorkspace();
+  return <AppShell initialWorkspace={workspace} />;
+}

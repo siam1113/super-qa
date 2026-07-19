@@ -4,6 +4,9 @@ const required = [
   'apps/web/components/AppShell.tsx',
   'apps/web/components/screens.tsx',
   'apps/web/app/globals.css',
+  'apps/web/lib/load-workspace.ts',
+  'apps/api/src/modules/qa/dto.ts',
+  'apps/api/src/modules/qa/seed-data.ts',
   'apps/api/src/app.module.ts',
   'apps/api/src/database/mongodb.module.ts',
   'apps/api/src/modules/qa/schemas.ts',
@@ -16,8 +19,8 @@ const web = readFileSync('apps/web/components/AppShell.tsx', 'utf8') + readFileS
 for (const token of ['RightInspector', 'CommandPalette', 'AICopilot', 'ActionModal', 'NotificationCenter', 'Healer', 'Knowledge Graph', 'Coverage Analysis', 'Data Setup', 'Saved Views', 'Bulk Edit', 'Generate Missing Test Cases']) {
   if (!web.includes(token)) throw new Error(`Missing UI token ${token}`);
 }
-const api = readFileSync('apps/api/src/modules/qa/schemas.ts', 'utf8') + readFileSync('apps/api/src/modules/qa/qa.controller.ts', 'utf8');
-for (const token of ['TestCase', 'Execution', 'Fact', 'Flow', 'Action', 'DomSnapshot', 'DataSetup']) {
+const api = readFileSync('apps/api/src/modules/qa/schemas.ts', 'utf8') + readFileSync('apps/api/src/modules/qa/qa.controller.ts', 'utf8') + readFileSync('apps/api/src/modules/qa/dto.ts', 'utf8');
+for (const token of ['TestCase', 'Execution', 'Fact', 'Flow', 'Action', 'DomSnapshot', 'DataSetup', 'RunRequestDto', 'HealingDecisionDto', 'GenerateTestsDto']) {
   if (!api.includes(token)) throw new Error(`Missing API model ${token}`);
 }
 console.log('Monorepo structure validation passed.');

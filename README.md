@@ -22,3 +22,9 @@ The web app runs on port `3000`; the API runs on port `4000` with `/api` as its 
 ```bash
 npm run validate
 ```
+
+## Implemented workflow wiring
+
+- The web app now attempts to load `/api/qa/workspace` and falls back to local seed data when the API is unavailable.
+- The API exposes mutation placeholders for primary workflows: `POST /api/qa/runs`, `POST /api/qa/healing-decisions`, and `POST /api/qa/generated-tests`.
+- The remaining production work is to replace the optimistic UI placeholders with persisted commands, authentication/RBAC, streaming execution events, artifact storage, and real agent orchestration.

@@ -1,22 +1,161 @@
 import { Injectable } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { Action, DataSetup, DomSnapshot, Execution, Fact, Flow, TestCase } from './schemas';
-import { GenerateTestsDto, HealingDecisionDto, RunRequestDto } from './dto';
-import { qaSeed } from './seed-data';
+import {
+  mockTestCases,
+  mockExecutions,
+  mockHealingSuggestions,
+  mockFlows,
+  mockFacts,
+  mockDashboardStats,
+} from './mock-data';
+import { SourcesService } from '../sources/sources.service';
+import { BusinessService } from '../business/business.service';
+
 @Injectable()
 export class QaService {
-  constructor(@InjectModel(TestCase.name) private readonly testCases: Model<TestCase>, @InjectModel(Execution.name) private readonly executions: Model<Execution>, @InjectModel(Flow.name) private readonly flows: Model<Flow>, @InjectModel(Fact.name) private readonly facts: Model<Fact>, @InjectModel(Action.name) private readonly actions: Model<Action>, @InjectModel(DomSnapshot.name) private readonly domSnapshots: Model<DomSnapshot>, @InjectModel(DataSetup.name) private readonly dataSetup: Model<DataSetup>) {}
-  dashboard() { return { kpis: { passed: 1284, failed: 37, blocked: 9, running: 14, skipped: 42, aiConfidence: 91, healingCount: 22 }, insights: ['Checkout Payment coverage below target', 'SSO flow is stable across browsers', 'Zephyr token expires soon'] }; }
-  async findTestCases() { const rows = await this.testCases.find().lean(); return rows.length ? rows : qaSeed.testCases; }
-  async findExecutions() { const rows = await this.executions.find().sort({ createdAt: -1 }).lean(); return rows.length ? rows : qaSeed.executions; }
-  async findFlows() { const rows = await this.flows.find().lean(); return rows.length ? rows : qaSeed.flows; }
-  async findFacts() { const rows = await this.facts.find().lean(); return rows.length ? rows : qaSeed.facts; }
-  async findActions() { const rows = await this.actions.find().lean(); return rows.length ? rows : qaSeed.actions; }
-  async findDomSnapshots() { const rows = await this.domSnapshots.find().lean(); return rows.length ? rows : qaSeed.domSnapshots; }
-  async findDataSetup() { const rows = await this.dataSetup.find().lean(); return rows.length ? rows : qaSeed.dataSetup; }
-  async workspaceEnvelope() { const [executions, testCases, flows, facts, actions, domSnapshots, dataSetup] = await Promise.all([this.findExecutions(), this.findTestCases(), this.findFlows(), this.findFacts(), this.findActions(), this.findDomSnapshots(), this.findDataSetup()]); return { data: { executions, testCases, flows, facts, actions, domSnapshots, dataSetup }, meta: { requestId: `seed-${Date.now()}`, generatedAt: new Date().toISOString(), workspaceId: 'enterprise-demo', permissions: ['read','run','review','approve'] } }; }
-  startRun(request: RunRequestDto) { return { id: `run-${Date.now()}`, status: 'queued', request, timeline: ['queued','allocating-browser','starting-agent'] }; }
-  decideHealing(decision: HealingDecisionDto) { return { id: decision.suggestionId, status: decision.decision === 'approve' ? 'approved' : 'rejected', scope: decision.scope, pr: decision.decision === 'approve' ? 'PR-128' : null }; }
-  generateTests(request: GenerateTestsDto) { return Array.from({ length: request.count }, (_, index) => ({ id: `AI-${index + 1}`, title: `${request.flow} generated risk test ${index + 1}`, priority: request.risk === 'High' ? 'P0' : 'P1', status: 'draft' })); }
+  constructor(
+    private readonly sourcesService: SourcesService,
+    private readonly businessService: BusinessService,
+  ) {}
+  getDashboard() {
+    return {
+      stats: mockDashboardStats,
+      recentExecutions: mockExecutions.slice(0, 5),
+      topRisks: mockTestCases
+        .filter((tc) => tc.risk === 'critical' || tc.risk === 'high')
+        .slice(0, 5),
+      pendingHealing: mockHealingSuggestions.filter((h) => h.status === 'pending').length,
+    };
+  }
+
+  getTestCases(filters?: { priority?: string; automation?: string; risk?: string }) {
+    let results = [...mockTestCases];
+
+    if (filters?.priority) {
+      results = results.filter((tc) => tc.priority === filters.priority);
+    }
+    if (filters?.automation) {
+      results = results.filter((tc) => tc.automation === filters.automation);
+    }
+    if (filters?.risk) {
+      results = results.filter((tc) => tc.risk === filters.risk);
+    }
+
+    return results;
+  }
+
+  getTestCase(id: string) {
+    return mockTestCases.find((tc) => tc.id === id) || null;
+  }
+
+  getExecutions(filters?: { status?: string; environment?: string; browser?: string }) {
+    let results = [...mockExecutions];
+
+    if (filters?.status) {
+      results = results.filter((e) => e.status === filters.status);
+    }
+    if (filters?.environment) {
+      results = results.filter((e) => e.environment === filters.environment);
+    }
+    if (filters?.browser) {
+      results = results.filter((e) => e.browser === filters.browser);
+    }
+
+    return results;
+  }
+
+  getHealingSuggestions(status?: string) {
+    if (status) {
+      return mockHealingSuggestions.filter((h) => h.status === status);
+    }
+    return mockHealingSuggestions;
+  }
+
+  approveHealing(id: string) {
+    // In real implementation, this would update the database
+    return { success: true, message: 'Healing suggestion approved' };
+  }
+
+  rejectHealing(id: string) {
+    return { success: true, message: 'Healing suggestion rejected' };
+  }
+
+  getFlows() {
+    return mockFlows;
+  }
+
+  getFlow(name: string) {
+    return mockFlows.find((f) => f.name.toLowerCase() === name.toLowerCase()) || null;
+  }
+
+  getFacts(category?: string) {
+    if (category) {
+      return mockFacts.filter((f) => f.category === category);
+    }
+    return mockFacts;
+  }
+
+  runTests(testIds?: string[]) {
+    return {
+      executionId: `EX-${Date.now()}`,
+      status: 'queued',
+      testsQueued: testIds?.length || mockTestCases.length,
+      estimatedDuration: '15 minutes',
+    };
+  }
+
+  getWorkspace() {
+    return {
+      name: 'Acme Corp QA',
+      stats: mockDashboardStats,
+      testCases: mockTestCases,
+      executions: mockExecutions,
+      healingSuggestions: mockHealingSuggestions,
+      flows: mockFlows,
+      facts: mockFacts,
+    };
+  }
+
+  async getContextCounts() {
+    // Fetch real counts from database
+    const [sources, businessStats] = await Promise.all([
+      this.sourcesService.findAll(),
+      this.businessService.getStatsByType(),
+    ]);
+
+    // Cast to Record<string, number> for flexible key access
+    const stats = businessStats as Record<string, number>;
+
+    return {
+      // Sources count from database
+      sources: sources.length,
+      // Product - from business items by type
+      flows: stats['flow'] || 0,
+      facts: stats['fact'] || 0,
+      entities: stats['entity'] || 0,
+      rules: stats['rule'] || 0,
+      states: stats['state'] || 0,
+      permissions: stats['permission'] || 0,
+      integrations: stats['integration'] || 0,
+      constraints: stats['constraint'] || 0,
+      configurations: stats['configuration'] || 0,
+      terminology: stats['terminology'] || 0,
+      features: 0, // Not in BusinessItemType yet
+      personas: 0, // Not in BusinessItemType yet
+      // Technical
+      apis: stats['api'] || 0,
+      code: stats['code'] || 0,
+      architecture: stats['architecture'] || 0,
+      database: stats['database'] || 0,
+      // Quality
+      testCases: stats['test_case'] || 0,
+      requirements: stats['requirement'] || 0,
+      defects: stats['defect'] || 0,
+      // Automation
+      dom: stats['dom'] || 0,
+      locators: stats['locator'] || 0,
+      actions: stats['action'] || 0,
+      dataSetup: stats['data_setup'] || 0,
+      auth: stats['auth'] || 0,
+    };
+  }
 }

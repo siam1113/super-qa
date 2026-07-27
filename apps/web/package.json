@@ -1,16 +1,32 @@
 {
-  "name": "@ultimate-qa/web",
+  "name": "web",
+  "version": "0.1.0",
   "private": true,
-  "scripts": {"dev":"next dev -p 3000","build":"next build","lint":"next lint"},
-  "dependencies": {
-    "@tanstack/react-table":"^8.20.5",
-    "framer-motion":"^11.3.24",
-    "lucide-react":"^0.468.0",
-    "next":"^15.0.0",
-    "react":"^19.0.0",
-    "react-dom":"^19.0.0",
-    "reactflow":"^11.11.4",
-    "zustand":"^5.0.0"
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
   },
-  "devDependencies": {"@types/node":"^22.0.0","@types/react":"^19.0.0","@types/react-dom":"^19.0.0","tailwindcss":"^3.4.17","typescript":"^5.5.4"}
+  "dependencies": {
+    "next": "13.5.6",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "@tanstack/react-table": "^8.20.0",
+    "zustand": "^4.5.0",
+    "framer-motion": "^11.0.0",
+    "lucide-react": "^0.400.0",
+    "clsx": "^2.1.0",
+    "tailwind-merge": "^2.3.0",
+    "date-fns": "^3.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "typescript": "^5.4.0",
+    "tailwindcss": "^3.4.0",
+    "postcss": "^8.4.0",
+    "autoprefixer": "^10.4.0"
+  }
 }

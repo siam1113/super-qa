@@ -20,6 +20,12 @@ export class ProjectGuard implements CanActivate {
 @Injectable()
 export class AutonomyLockdownGuard implements CanActivate {
   canActivate(context: ExecutionContext) {
+    // Explicit, deliberate opt-out — for a full-featured dev/staging deployment
+    // that still wants NODE_ENV=production's other behavior (TLS cookies, no
+    // TypeORM synchronize, etc.) without the legacy-route lockdown. Requires
+    // the literal string 'false', not just "unset" — an unset AUTONOMY_LOCKDOWN
+    // in production stays locked by default, same as before.
+    if (process.env.AUTONOMY_LOCKDOWN === 'false') return true;
     if (process.env.AUTONOMY_LOCKDOWN !== 'true' && process.env.NODE_ENV !== 'production') return true;
     const controller = context.getClass().name;
     if (['WorkflowArtifactController', 'AutonomyController', 'AuthController', 'HarnessController', 'HarnessWorkerController', 'HarnessExecutionController', 'HarnessExecutorController', 'HealthController', 'ChatController', 'ChatHookController', 'MeetingController', 'MeetingHookController', 'VoiceController', 'VoiceBridgeController', 'SuperQaVoiceController', 'OutpostController'].includes(controller)) return true;

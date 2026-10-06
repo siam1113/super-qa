@@ -91,7 +91,10 @@ services:
       AUTH_PUBLIC_URL: https://${DOMAIN}
       API_URL: https://${DOMAIN}
       MEETING_PUBLIC_API_URL: https://${DOMAIN}
-      AUTONOMY_LOCKDOWN: "true"
+      # Safe by default: any deployment that doesn't set AUTONOMY_LOCKDOWN in
+      # its .env stays locked. Set AUTONOMY_LOCKDOWN=false there to run a
+      # full-featured (non-multi-tenant-safe) dev/staging deployment instead.
+      AUTONOMY_LOCKDOWN: ${AUTONOMY_LOCKDOWN:-true}
       AUTONOMY_ALLOWED_ORIGINS: '["https://${DOMAIN}"]'
     depends_on:
       postgres:

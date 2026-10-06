@@ -12,7 +12,20 @@ export function LoginPage() {
   const submit = (event: FormEvent) => {
     event.preventDefault(); setBusy(true); setError('');
     void fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', cache: 'no-store', body: JSON.stringify({ email, password }) })
-      .then(async response => { const result = await response.json(); if (!response.ok) throw new Error(result.message || 'Sign in failed'); location.assign(result.user.accountType === 'super_admin' ? '/admin' : result.user.onboardingCompleted === false ? '/onboarding' : '/settings'); })
+      .catch(() => { throw new Error('Could not reach the server. Check your connection and try again.'); })
+      .then(async response => {
+        // A gateway/proxy failure (502/503/504) has no JSON body at all, not an
+        // app-level error payload — don't let that surface as a raw parse error.
+        let result: { message?: string; user?: { accountType: string; onboardingCompleted?: boolean } } | null = null;
+        try { result = await response.json(); } catch { /* empty/non-JSON body */ }
+        if (!response.ok) {
+          throw new Error(result?.message || (response.status >= 500
+            ? 'The server is temporarily unavailable. Please try again in a moment.'
+            : 'Sign in failed.'));
+        }
+        if (!result?.user) throw new Error('Sign in failed: unexpected response from the server.');
+        location.assign(result.user.accountType === 'super_admin' ? '/admin' : result.user.onboardingCompleted === false ? '/onboarding' : '/settings');
+      })
       .catch(failure => setError(failure instanceof Error ? failure.message : 'Sign in failed.')).finally(() => setBusy(false));
   };
   return <main className="min-h-screen bg-canvas p-6 text-text-primary"><section className="mx-auto mt-16 max-w-md space-y-5 rounded-xl border border-border bg-surface p-6">

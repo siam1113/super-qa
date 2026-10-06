@@ -14,7 +14,19 @@ export function AcceptInvitationPage() {
     if (password !== confirmation) { setError('Passwords do not match.'); return; }
     setBusy(true);
     void fetch('/api/auth/accept-invitation', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', cache: 'no-store', body: JSON.stringify({ token, password }) })
-      .then(async response => { const result = await response.json(); if (!response.ok) throw new Error(result.message || 'Invitation could not be accepted'); location.assign('/settings'); })
+      .catch(() => { throw new Error('Could not reach the server. Check your connection and try again.'); })
+      .then(async response => {
+        // A gateway/proxy failure (502/503/504) has no JSON body at all, not an
+        // app-level error payload — don't let that surface as a raw parse error.
+        let result: { message?: string } | null = null;
+        try { result = await response.json(); } catch { /* empty/non-JSON body */ }
+        if (!response.ok) {
+          throw new Error(result?.message || (response.status >= 500
+            ? 'The server is temporarily unavailable. Please try again in a moment.'
+            : 'Invitation could not be accepted.'));
+        }
+        location.assign('/settings');
+      })
       .catch(failure => setError(failure instanceof Error ? failure.message : 'Invitation could not be accepted.')).finally(() => setBusy(false));
   };
   return <main className="min-h-screen bg-canvas p-6 text-text-primary"><section className="mx-auto mt-16 max-w-md space-y-5 rounded-xl border border-border bg-surface p-6">

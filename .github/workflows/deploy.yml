@@ -44,6 +44,15 @@ jobs:
             set -e
             cd /opt/ultimate-qa-agent
             # deploy.sh pulls main itself too, but can't run at all until it
-            # exists on the server — pull it into existence first.
-            git pull --ff-only origin main
+            # exists on the server — pull it into existence first. Force-sync
+            # rather than a plain pull: the server is a pure deploy target
+            # (secrets/config arrive via bootstrap-env.sh + GitHub secrets,
+            # never hand-edited here), so any local drift on tracked files —
+            # or a stray untracked file blocking a path git now tracks — is
+            # unintentional and safe to discard. git clean respects
+            # .gitignore, so the generated .env/.env.production/s3-config.json
+            # secret files are left alone.
+            git fetch origin main
+            git clean -fd
+            git reset --hard origin/main
             ./deploy/deploy.sh

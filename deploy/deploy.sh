@@ -9,7 +9,13 @@ echo "==> Checking env files"
 ./deploy/bootstrap-env.sh
 
 echo "==> Pulling latest main"
-git pull --ff-only origin main
+# Force-sync rather than a plain pull — this server is a pure deploy target,
+# so any local drift on tracked files is unintentional. git clean respects
+# .gitignore, so generated secret files (.env, .env.production, s3-config.json)
+# are left alone.
+git fetch origin main
+git clean -fd
+git reset --hard origin/main
 
 echo "==> Building images"
 docker compose -f docker-compose.prod.yml build

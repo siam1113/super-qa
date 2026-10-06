@@ -92,6 +92,21 @@ sync_shared_secret() {
 sync_shared_secret AGENT_MEMORY_SIGNING_KEY 32
 sync_shared_secret QA_WORKFLOW_KEY 32
 
+# Renders the SeaweedFS S3-gateway identity config from S3_ACCESS_KEY/
+# S3_SECRET_KEY — docker-compose.prod.yml's `storage` service reads this,
+# there's no env-var-only way to configure SeaweedFS's S3 auth.
+cat > deploy/s3-config.json <<JSON
+{
+  "identities": [
+    {
+      "name": "qaagent",
+      "credentials": [{"accessKey": "$(current_value "$ROOT_ENV" S3_ACCESS_KEY)", "secretKey": "$(current_value "$ROOT_ENV" S3_SECRET_KEY)"}],
+      "actions": ["Admin", "Read", "Write"]
+    }
+  ]
+}
+JSON
+
 # Can't invent these — stop and ask, rather than booting a broken stack.
 missing=()
 if [ -z "$(current_value "$ROOT_ENV" DOMAIN)" ]; then

@@ -30,20 +30,24 @@ services:
       timeout: 5s
       retries: 5
 
+  # Self-hosted S3-compatible storage. Was MinIO; switched to SeaweedFS
+  # because MinIO gated all its container images behind their own
+  # login/subscription in 2025 — minio/minio is no longer pullable
+  # anonymously on Docker Hub or quay.io. Credentials here are the same
+  # throwaway dev defaults as before (qaagent/qaagent123), just baked into
+  # deploy/s3-config.dev.json instead of env vars since SeaweedFS's S3
+  # gateway has no env-var-only way to configure auth.
   minio:
-    image: minio/minio:latest
+    image: chrislusf/seaweedfs:latest
     container_name: qa-agent-minio
     ports:
       - "9000:9000"
-      - "9001:9001"
-    environment:
-      MINIO_ROOT_USER: qaagent
-      MINIO_ROOT_PASSWORD: qaagent123
     volumes:
       - miniodata:/data
-    command: server /data --console-address ":9001"
+      - ./deploy/s3-config.dev.json:/etc/seaweedfs/s3-config.json:ro
+    command: server -dir=/data -s3 -s3.port=9000 -s3.config=/etc/seaweedfs/s3-config.json
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD-SHELL", "curl -s -o /dev/null -w '%{http_code}' http://localhost:9000/ | grep -qE '^(200|403)$'"]
       interval: 10s
       timeout: 5s
       retries: 5

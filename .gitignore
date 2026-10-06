@@ -15,6 +15,7 @@ out/
 .env.production
 !.env.production.example
 !.env.deploy.example
+deploy/s3-config.json
 
 # IDE
 .idea/

@@ -1,3 +1,3 @@
-import { AppShell } from '@/components/AppShell';
+import { ScopedHomeRedirect } from '@/components/ScopedHomeRedirect';
 
-export default function IntegrationsRoute() { return <AppShell initialPage="integrations" />; }
+export default function IntegrationsRoute() { return <ScopedHomeRedirect />; }

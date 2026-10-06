@@ -1,3 +1,3 @@
-import { AppShell } from '@/components/AppShell';
+import { ScopedHomeRedirect } from '@/components/ScopedHomeRedirect';
 
-export default function ChatRoute() { return <AppShell initialPage="chat" />; }
+export default function ChatRoute() { return <ScopedHomeRedirect />; }

@@ -21,7 +21,7 @@ import { Chunk } from '../../src/modules/documents/entities/chunk.entity';
 import { BusinessItem, BusinessRelationship } from '../../src/modules/business/entities/business-item.entity';
 import { AutonomyService } from '../../src/modules/autonomy/autonomy.service';
 import { AutonomyController, ProjectGuard } from '../../src/modules/autonomy/autonomy.controller';
-import { AutonomousRun, AutonomousSuite, ProjectKey, QaAuditEvent, QaProject } from '../../src/modules/autonomy/autonomy.entity';
+import { AutonomousRun, AutonomousSuite, ProjectKey, QaAuditEvent, QaOrganization, QaProject } from '../../src/modules/autonomy/autonomy.entity';
 
 describe('authorized deterministic browser executions', () => {
   let database: DataSource;
@@ -39,7 +39,7 @@ describe('authorized deterministic browser executions', () => {
 
   beforeAll(async () => {
     database = new DataSource({ type: 'postgres', host: '127.0.0.1', port: 55432, username: 'pipeline_test', password: 'pipeline_test', database: 'pipeline_test', synchronize: true,
-      entities: [QaProject, ProjectKey, AutonomousSuite, AutonomousRun, QaAuditEvent, HarnessExecution, HarnessRun, QaTestCase, QaRun, QaExecution, QaHealingSuggestion, Source, SyncJob, SyncWork, Document, Chunk, BusinessItem, BusinessRelationship] });
+      entities: [QaOrganization, QaProject, ProjectKey, AutonomousSuite, AutonomousRun, QaAuditEvent, HarnessExecution, HarnessRun, QaTestCase, QaRun, QaExecution, QaHealingSuggestion, Source, SyncJob, SyncWork, Document, Chunk, BusinessItem, BusinessRelationship] });
     await database.initialize();
     const module = await Test.createTestingModule({ controllers: [AutonomyController, HarnessController, HarnessWorkerController, HarnessExecutionController, HarnessExecutorController],
       providers: [AutonomyService, ProjectGuard, HarnessService, HarnessExecutionService, { provide: DataSource, useValue: database }] }).compile();

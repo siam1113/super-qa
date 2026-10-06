@@ -13,7 +13,7 @@ import { createServer as createNetServer } from 'net';
 import { promisify } from 'util';
 import { AutonomyService } from '../../src/modules/autonomy/autonomy.service';
 import { AutonomyController, AutonomyLockdownGuard, ProjectGuard } from '../../src/modules/autonomy/autonomy.controller';
-import { AutonomousRun, AutonomousSuite, ProjectKey, QaAuditEvent, QaProject } from '../../src/modules/autonomy/autonomy.entity';
+import { AutonomousRun, AutonomousSuite, ProjectKey, QaAuditEvent, QaOrganization, QaProject } from '../../src/modules/autonomy/autonomy.entity';
 import { HarnessService } from '../../src/modules/harness/harness.service';
 import { HarnessExecutionService } from '../../src/modules/harness/execution.service';
 import { QaBenchmark } from '../../src/modules/autonomy/benchmark.entity';
@@ -48,7 +48,7 @@ describe('project autonomy control plane', () => {
   };
 
   beforeAll(async () => {
-    database = new DataSource({ type: 'postgres', host: '127.0.0.1', port: 55432, username: 'pipeline_test', password: 'pipeline_test', database: 'pipeline_test', synchronize: true, entities: [QaProject, ProjectKey, AutonomousSuite, AutonomousRun, QaAuditEvent, QaBenchmark, QaOrgMember, QaOrgInvitation, QaAuthSession, QaOidcAttempt, QaSuperAdmin] });
+    database = new DataSource({ type: 'postgres', host: '127.0.0.1', port: 55432, username: 'pipeline_test', password: 'pipeline_test', database: 'pipeline_test', synchronize: true, entities: [QaOrganization, QaProject, ProjectKey, AutonomousSuite, AutonomousRun, QaAuditEvent, QaBenchmark, QaOrgMember, QaOrgInvitation, QaAuthSession, QaOidcAttempt, QaSuperAdmin] });
     await database.initialize();
     await database.manager.delete(QaSuperAdmin, { email: superAdminEmail });
     const salt = 'test-admin-salt';

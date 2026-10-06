@@ -116,8 +116,9 @@ export class QaService {
       const contentChanged = !this.sameValue(current.steps, input.steps) ||
         (input.preconditions !== undefined && !this.sameValue(current.preconditions, input.preconditions));
       if (current.evidence && contentChanged) throw new ConflictException('Create a manual case or import current evidence to change grounded steps');
-      // Editing the script invalidates any prior review; editing metadata alone (owner, status, etc.) does not.
-      Object.assign(current, input, { revision: current.revision + 1, ...(contentChanged ? { reviewStatus: 'draft', reviewedBy: null } : {}) });
+      const reviewInvalidated = contentChanged || current.title !== input.title;
+      // Editing the script or its title invalidates any prior review; editing other metadata alone (owner, status, etc.) does not.
+      Object.assign(current, input, { revision: current.revision + 1, ...(reviewInvalidated ? { reviewStatus: 'draft', reviewedBy: null } : {}) });
       return manager.save(QaTestCase, current);
     });
   }

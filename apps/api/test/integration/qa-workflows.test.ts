@@ -1,5 +1,6 @@
 import { DataSource } from 'typeorm';
 import { Test } from '@nestjs/testing';
+import { getQueueToken } from '@nestjs/bull';
 import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { readFileSync } from 'fs';
@@ -9,6 +10,7 @@ import { QaService } from '../../src/modules/qa/qa.service';
 import { QaTestCase, QaRun, QaExecution, QaHealingSuggestion } from '../../src/modules/qa/qa.entity';
 import { SourcesService } from '../../src/modules/sources/sources.service';
 import { BusinessService } from '../../src/modules/business/business.service';
+import { AgentsService } from '../../src/modules/agents/agents.service';
 import { Source } from '../../src/modules/sources/entities/source.entity';
 import { SyncJob } from '../../src/modules/sources/entities/sync-job.entity';
 import { SyncWork } from '../../src/modules/pipeline/entities/sync-work.entity';
@@ -21,6 +23,8 @@ describe('persisted QA HTTP workflows', () => {
   let app: any;
   const services = { findAll: async () => [] };
   const business = { getStatsByType: async () => ({}) };
+  const agents = { startExecution: async () => { throw new Error('not used in these tests'); }, chatWithMemories: async () => { throw new Error('not used in these tests'); } };
+  const generationQueue = { add: async () => undefined };
   const input = { title: 'Login', steps: [{ action: 'Enter valid credentials', expected: 'Access granted' }] };
   const result = { reporter: 'qa-operator', duration: 12, steps: [{ actual: 'Access granted', passed: true, evidence: 'manual observation record 1' }] };
 
@@ -30,6 +34,7 @@ describe('persisted QA HTTP workflows', () => {
     await database.initialize();
     const module = await Test.createTestingModule({ controllers: [QaController], providers: [QaService,
       { provide: DataSource, useValue: database }, { provide: SourcesService, useValue: services }, { provide: BusinessService, useValue: business },
+      { provide: AgentsService, useValue: agents }, { provide: getQueueToken('qa-generation'), useValue: generationQueue },
     ] }).compile();
     app = module.createNestApplication();
     app.setGlobalPrefix('api');
@@ -79,7 +84,7 @@ describe('persisted QA HTTP workflows', () => {
     await request(app.getHttpServer()).post(`/api/qa/executions/${executionId}/result`).send(result).expect(201);
     await request(app.getHttpServer()).post(`/api/qa/executions/${executionId}/result`).send(result).expect(201);
     await request(app.getHttpServer()).post(`/api/qa/executions/${executionId}/result`).send({ ...result, duration: 13 }).expect(409);
-    const recreated = new QaService(services as any, business as any, database);
+    const recreated = new QaService(services as any, business as any, agents as any, database, generationQueue as any);
     expect((await recreated.getDashboard()).stats).toMatchObject({ passed: 1, failed: 0, pending: 0 });
     expect((await recreated.getTestCases())[0].passRate).toBe(100);
     expect((await recreated.getExecutions())[0]).toMatchObject({ mode: 'manual', resultOrigin: 'human-reported', aiConfidence: null });

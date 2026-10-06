@@ -4,6 +4,7 @@ import { QaTestCase, QaRun, QaExecution, QaHealingSuggestion } from '../../src/m
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import Queue from 'bull';
 import { PipelineStore, LeaseLostError } from '../../src/modules/pipeline/pipeline.store';
+import { WorkerWakeupService } from '../../src/common/worker-wakeup.service';
 import { PipelineService } from '../../src/modules/pipeline/pipeline.service';
 import { SyncWork } from '../../src/modules/pipeline/entities/sync-work.entity';
 import { Source } from '../../src/modules/sources/entities/source.entity';
@@ -55,7 +56,7 @@ describe('Durable pipeline with isolated PostgreSQL and Redis', () => {
 
   beforeEach(async () => {
     await database.query('TRUNCATE sync_work, chunks, business_relationships, business_items, documents, sync_jobs, sources CASCADE');
-    store = new PipelineStore(database, new EventEmitter2());
+    store = new PipelineStore(database, new EventEmitter2(), new WorkerWakeupService());
     source = await database.getRepository(Source).save({ name: 'Isolated test source', type: 'github', config: { authType: 'token' }, status: 'connected' });
   });
 
@@ -118,7 +119,7 @@ describe('Durable pipeline with isolated PostgreSQL and Redis', () => {
     const job = await store.start(source.id);
     const [oldDelivery] = await store.claim();
     await expire(job.id);
-    const restarted = new PipelineStore(database, new EventEmitter2());
+    const restarted = new PipelineStore(database, new EventEmitter2(), new WorkerWakeupService());
     const [newDelivery] = await restarted.claim();
     expect(newDelivery.token).not.toBe(oldDelivery.token);
     await expect(store.begin(job.id, oldDelivery.token)).rejects.toBeInstanceOf(LeaseLostError);
@@ -402,7 +403,7 @@ describe('Durable pipeline with isolated PostgreSQL and Redis', () => {
     expect((await store.read(job.id)).status).toBe('queued');
     expect((await store.read(job.id)).attempts).toBe(0);
     await expire(job.id);
-    const [redelivery] = await new PipelineStore(database, new EventEmitter2()).claim();
+    const [redelivery] = await new PipelineStore(database, new EventEmitter2(), new WorkerWakeupService()).claim();
     expect(redelivery.jobId).toBe(job.id);
   });
 
@@ -449,7 +450,7 @@ describe('Durable pipeline with isolated PostgreSQL and Redis', () => {
     await expire(job.id);
     const embeddings = { embed: jest.fn(), getDimension: () => 2 };
     const extraction = { extractFromDocument: jest.fn().mockResolvedValue({ items: [], relationships: [] }) };
-    const restarted = new PipelineStore(database, new EventEmitter2());
+    const restarted = new PipelineStore(database, new EventEmitter2(), new WorkerWakeupService());
     const worker = new PipelineService(restarted, queue, database.getRepository(Source), new ChunkingService(), embeddings as any, extraction as any);
     queue.process('run-sync', async delivery => worker.execute(delivery));
     await worker.dispatch();

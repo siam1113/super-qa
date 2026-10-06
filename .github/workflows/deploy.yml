@@ -43,4 +43,7 @@ jobs:
           script: |
             set -e
             cd /opt/ultimate-qa-agent
+            # deploy.sh pulls main itself too, but can't run at all until it
+            # exists on the server — pull it into existence first.
+            git pull --ff-only origin main
             ./deploy/deploy.sh

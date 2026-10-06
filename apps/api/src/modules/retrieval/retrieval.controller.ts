@@ -4,8 +4,11 @@ import {
   Body,
   Get,
   Query,
+  BadRequestException,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
-import { IsString, IsOptional, IsNumber, IsArray } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsArray, ArrayMinSize, ArrayMaxSize } from 'class-validator';
 import { RetrievalService } from './retrieval.service';
 
 class SearchDto {
@@ -16,10 +19,11 @@ class SearchDto {
   @IsNumber()
   limit?: number;
 
-  @IsOptional()
   @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(50)
   @IsString({ each: true })
-  sourceIds?: string[];
+  sourceIds: string[];
 
   @IsOptional()
   @IsArray()
@@ -31,16 +35,31 @@ class SearchDto {
   minSimilarity?: number;
 }
 
-class QueryDto {
-  @IsString()
-  query: string;
-
+class QueryDto extends SearchDto {
   @IsOptional()
   @IsNumber()
   maxTokens?: number;
 }
 
+class ResolveCitationDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(50)
+  @IsString({ each: true })
+  sourceIds: string[];
+
+  @IsString()
+  documentId: string;
+
+  @IsString()
+  chunkId: string;
+
+  @IsString()
+  revisionHash: string;
+}
+
 @Controller('retrieval')
+@UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
 export class RetrievalController {
   constructor(private readonly retrievalService: RetrievalService) {}
 
@@ -62,25 +81,35 @@ export class RetrievalController {
 
   @Post('query')
   async query(@Body() queryDto: QueryDto) {
-    const context = await this.retrievalService.getContext(
+    const evidence = await this.retrievalService.getEvidence(
       queryDto.query,
       queryDto.maxTokens,
+      queryDto,
     );
 
     return {
       query: queryDto.query,
-      context,
+      context: evidence.context,
+      citations: evidence.chunks.map(chunk => chunk.citation),
+      omittedChunks: evidence.omittedChunks || 0,
+      status: evidence.chunks.length ? 'evidence' : evidence.omittedChunks ? 'budget_exhausted' : 'no_evidence',
     };
   }
 
+  @Post('resolve')
+  async resolve(@Body() request: ResolveCitationDto) {
+    return this.retrievalService.resolveCitation(request.documentId, request.chunkId, request.revisionHash, { sourceIds: request.sourceIds });
+  }
+
   @Get('search')
-  async searchGet(@Query('q') query: string, @Query('limit') limit?: string) {
+  async searchGet(@Query('q') query: string, @Query('limit') limit?: string, @Query('sourceIds') sourceIds?: string) {
     if (!query) {
-      return { error: 'Query parameter "q" is required' };
+      throw new BadRequestException('Query parameter "q" is required');
     }
 
     const results = await this.retrievalService.search(query, {
-      limit: limit ? parseInt(limit, 10) : undefined,
+      limit: limit ? Number(limit) : undefined,
+      sourceIds: sourceIds?.split(','),
     });
 
     return {

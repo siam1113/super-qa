@@ -192,6 +192,14 @@ TOOL_DEFINITIONS: List[Tool] = [
                     "description": "Browser timezone",
                     "default": "America/New_York",
                 },
+                "record_video": {
+                    "type": "boolean",
+                    "description": "Whether to record video (defaults to config setting)",
+                },
+                "video_dir": {
+                    "type": "string",
+                    "description": "Directory to save videos (defaults to config setting)",
+                },
             },
             "required": ["session_id"],
         },

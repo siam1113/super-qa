@@ -1,5 +1,5 @@
 """LangGraph state definitions for agents."""
-from typing import TypedDict, Annotated, Sequence, Literal
+from typing import TypedDict, Annotated, Sequence, Literal, Optional, List
 from langchain_core.messages import BaseMessage
 import operator
 
@@ -13,6 +13,12 @@ class AgentState(TypedDict):
     # Current context from business knowledge
     context: dict
 
+    # Retrieved long-term agent memories for this request
+    memories: list
+
+    # Selected meeting notes/transcript attached as reference context for this request
+    meeting_context: Optional[str]
+
     # Tool results from the current turn
     tool_results: dict
 
@@ -23,13 +29,18 @@ class AgentState(TypedDict):
     session_id: str
 
     # Agent type (qae or aue)
-    agent_type: Literal["qae", "aue"]
+    agent_type: Literal["qae", "aue", "superqa"]
+
+    # Explicit workflow requests bypass conversational model routing.
+    skill_request: dict
+    skill_result: dict
+    agent_iterations: int
 
 
 class ChatRequest(TypedDict):
     """Request format for chat endpoint."""
     message: str
-    session_id: str | None
+    session_id: Optional[str]
 
 
 class ChatResponse(TypedDict):
@@ -37,4 +48,4 @@ class ChatResponse(TypedDict):
     session_id: str
     message_id: str
     response: str
-    tool_calls: list[dict] | None
+    tool_calls: Optional[List[dict]]

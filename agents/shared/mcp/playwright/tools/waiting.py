@@ -3,7 +3,7 @@ import logging
 import time
 import re
 from datetime import datetime
-from typing import Literal, Optional, Dict, Any
+from typing import Literal, Optional, Dict, Any, Union
 
 from ..context import get_browser_manager
 from ..types import ActionStatus
@@ -39,6 +39,7 @@ async def wait_for_selector(
     if not page:
         return {
             "success": False,
+            "status": ActionStatus.ERROR.value,
             "waitType": "selector",
             "errorMessage": f"Page not found: {page_id}",
         }
@@ -55,6 +56,7 @@ async def wait_for_selector(
 
         return {
             "success": True,
+            "status": ActionStatus.SUCCESS.value,
             "waitType": "selector",
             "selector": selector,
             "state": state,
@@ -70,6 +72,7 @@ async def wait_for_selector(
 
         return {
             "success": False,
+            "status": ActionStatus.FAILED.value,
             "waitType": "selector",
             "selector": selector,
             "state": state,
@@ -103,6 +106,7 @@ async def wait_for_navigation(
     if not page:
         return {
             "success": False,
+            "status": ActionStatus.ERROR.value,
             "waitType": "navigation",
             "errorMessage": f"Page not found: {page_id}",
         }
@@ -128,6 +132,7 @@ async def wait_for_navigation(
 
         return {
             "success": True,
+            "status": ActionStatus.SUCCESS.value,
             "waitType": "navigation",
             "url": page.url,
             "urlPattern": url_pattern,
@@ -142,6 +147,7 @@ async def wait_for_navigation(
 
         return {
             "success": False,
+            "status": ActionStatus.FAILED.value,
             "waitType": "navigation",
             "url": page.url,
             "urlPattern": url_pattern,
@@ -177,6 +183,7 @@ async def wait_for_load_state(
     if not page:
         return {
             "success": False,
+            "status": ActionStatus.ERROR.value,
             "waitType": "loadState",
             "errorMessage": f"Page not found: {page_id}",
         }
@@ -192,6 +199,7 @@ async def wait_for_load_state(
 
         return {
             "success": True,
+            "status": ActionStatus.SUCCESS.value,
             "waitType": "loadState",
             "state": state,
             "url": page.url,
@@ -205,6 +213,7 @@ async def wait_for_load_state(
 
         return {
             "success": False,
+            "status": ActionStatus.FAILED.value,
             "waitType": "loadState",
             "state": state,
             "errorMessage": error_msg,
@@ -233,6 +242,7 @@ async def wait_for_timeout(
     if not page:
         return {
             "success": False,
+            "status": ActionStatus.ERROR.value,
             "waitType": "timeout",
             "errorMessage": f"Page not found: {page_id}",
         }
@@ -248,6 +258,7 @@ async def wait_for_timeout(
 
         return {
             "success": True,
+            "status": ActionStatus.SUCCESS.value,
             "waitType": "timeout",
             "requestedMs": timeout,
             "actualMs": duration_ms,
@@ -259,6 +270,7 @@ async def wait_for_timeout(
 
         return {
             "success": False,
+            "status": ActionStatus.FAILED.value,
             "waitType": "timeout",
             "requestedMs": timeout,
             "errorMessage": str(e),
@@ -289,6 +301,7 @@ async def wait_for_url(
     if not page:
         return {
             "success": False,
+            "status": ActionStatus.ERROR.value,
             "waitType": "url",
             "errorMessage": f"Page not found: {page_id}",
         }
@@ -310,6 +323,7 @@ async def wait_for_url(
 
         return {
             "success": True,
+            "status": ActionStatus.SUCCESS.value,
             "waitType": "url",
             "urlPattern": url_pattern,
             "actualUrl": page.url,
@@ -323,6 +337,7 @@ async def wait_for_url(
 
         return {
             "success": False,
+            "status": ActionStatus.FAILED.value,
             "waitType": "url",
             "urlPattern": url_pattern,
             "actualUrl": page.url,
@@ -336,7 +351,7 @@ async def wait_for_function(
     page_id: str,
     expression: str,
     timeout: int = 30000,
-    polling: Literal["raf", "mutation"] | int = "raf",
+    polling: Union[Literal["raf", "mutation"], int] = "raf",
 ) -> Dict[str, Any]:
     """
     Wait for a JavaScript function to return a truthy value.
@@ -356,6 +371,7 @@ async def wait_for_function(
     if not page:
         return {
             "success": False,
+            "status": ActionStatus.ERROR.value,
             "waitType": "function",
             "errorMessage": f"Page not found: {page_id}",
         }
@@ -378,6 +394,7 @@ async def wait_for_function(
 
         return {
             "success": True,
+            "status": ActionStatus.SUCCESS.value,
             "waitType": "function",
             "expression": expression[:100] + "..." if len(expression) > 100 else expression,
             "result": result_value,
@@ -391,6 +408,7 @@ async def wait_for_function(
 
         return {
             "success": False,
+            "status": ActionStatus.FAILED.value,
             "waitType": "function",
             "expression": expression[:100] + "..." if len(expression) > 100 else expression,
             "errorMessage": error_msg,
@@ -421,6 +439,7 @@ async def wait_for_response(
     if not page:
         return {
             "success": False,
+            "status": ActionStatus.ERROR.value,
             "waitType": "response",
             "errorMessage": f"Page not found: {page_id}",
         }
@@ -439,10 +458,11 @@ async def wait_for_response(
 
         return {
             "success": True,
+            "status": ActionStatus.SUCCESS.value,
             "waitType": "response",
             "urlPattern": url_pattern,
             "responseUrl": response.url,
-            "status": response.status,
+            "httpStatus": response.status,
             "statusText": response.status_text,
             "durationMs": duration_ms,
             "timestamp": datetime.now().isoformat(),
@@ -454,6 +474,7 @@ async def wait_for_response(
 
         return {
             "success": False,
+            "status": ActionStatus.FAILED.value,
             "waitType": "response",
             "urlPattern": url_pattern,
             "errorMessage": error_msg,
@@ -484,6 +505,7 @@ async def wait_for_request(
     if not page:
         return {
             "success": False,
+            "status": ActionStatus.ERROR.value,
             "waitType": "request",
             "errorMessage": f"Page not found: {page_id}",
         }
@@ -502,6 +524,7 @@ async def wait_for_request(
 
         return {
             "success": True,
+            "status": ActionStatus.SUCCESS.value,
             "waitType": "request",
             "urlPattern": url_pattern,
             "requestUrl": request.url,
@@ -517,6 +540,7 @@ async def wait_for_request(
 
         return {
             "success": False,
+            "status": ActionStatus.FAILED.value,
             "waitType": "request",
             "urlPattern": url_pattern,
             "errorMessage": error_msg,

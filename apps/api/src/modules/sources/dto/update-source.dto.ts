@@ -17,7 +17,7 @@ class OAuthConfigDto {
 
 class SourceConfigUpdateDto {
   @IsOptional()
-  @IsEnum(['token', 'oauth'])
+  @IsEnum(['token', 'oauth', 'none'])
   authType?: AuthType;
 
   @IsOptional()

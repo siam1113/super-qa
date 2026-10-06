@@ -20,7 +20,8 @@ export type DocumentType =
   | 'wiki'
   | 'test_case'
   | 'api_spec'
-  | 'comment';
+  | 'comment'
+  | 'file';
 
 @Entity('documents')
 export class Document {
@@ -56,6 +57,9 @@ export class Document {
   @Index()
   @Column()
   contentHash: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  processedHash: string | null;
 
   @CreateDateColumn()
   createdAt: Date;

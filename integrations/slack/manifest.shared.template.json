@@ -1,0 +1,50 @@
+{
+  "display_information": {
+    "name": "Super QA",
+    "description": "Quality engineering assistant for your workspace",
+    "background_color": "#172554"
+  },
+  "features": {
+    "bot_user": {
+      "display_name": "Super QA",
+      "always_online": false
+    }
+  },
+  "oauth_config": {
+    "redirect_urls": [
+      "https://{{APP_DOMAIN}}/api/chat-hooks/slack/oauth/callback"
+    ],
+    "scopes": {
+      "bot": [
+        "app_mentions:read",
+        "channels:history",
+        "channels:read",
+        "chat:write",
+        "groups:history",
+        "groups:read",
+        "im:history",
+        "im:read",
+        "mpim:history",
+        "mpim:read"
+      ]
+    }
+  },
+  "settings": {
+    "event_subscriptions": {
+      "request_url": "https://{{APP_DOMAIN}}/api/chat-hooks/slack",
+      "bot_events": [
+        "app_mention",
+        "message.channels",
+        "message.groups",
+        "message.im",
+        "message.mpim",
+        "member_left_channel",
+        "tokens_revoked",
+        "app_uninstalled"
+      ]
+    },
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": false,
+    "token_rotation_enabled": false
+  }
+}

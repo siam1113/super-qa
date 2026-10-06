@@ -16,6 +16,7 @@ export class EmbeddingService {
     'sentence-transformers/all-MiniLM-L6-v2': 384,
     'text-embedding-ada-002': 1536,
     'text-embedding-3-small': 1536,
+    'text-embedding-3-large': 3072,
   };
 
   constructor(private configService: ConfigService) {
@@ -60,14 +61,18 @@ export class EmbeddingService {
    * Get the dimension of embeddings
    */
   getDimension(): number {
-    switch (this.provider) {
-      case 'openai':
-        return 1536;
-      case 'huggingface':
-      case 'local':
-      default:
-        return 384;
+    const model = this.configService.get('EMBEDDING_MODEL') || 'text-embedding-3-small';
+
+    if (this.provider === 'openai') {
+      return this.dimensions[model] || 1536;
     }
+
+    if (this.provider === 'huggingface') {
+      return 384;
+    }
+
+    // local
+    return 384;
   }
 
   private async embedWithOpenAI(texts: string[]): Promise<number[][]> {
@@ -75,25 +80,47 @@ export class EmbeddingService {
       throw new Error('OpenAI API key not configured');
     }
 
-    const response = await fetch('https://api.openai.com/v1/embeddings', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.openaiApiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'text-embedding-3-small',
-        input: texts,
-      }),
-    });
+    const model = this.configService.get('EMBEDDING_MODEL') || 'text-embedding-3-small';
+    const totalChars = texts.reduce((sum, t) => sum + t.length, 0);
 
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`OpenAI API error: ${error}`);
+    try {
+      const startTime = Date.now();
+      this.logger.log(`📤 OpenAI API Call: model=${model}, texts=${texts.length}, chars=${totalChars}`);
+
+      const response = await fetch('https://api.openai.com/v1/embeddings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.openaiApiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          input: texts,
+        }),
+      });
+
+      const elapsed = Date.now() - startTime;
+
+      if (!response.ok) {
+        const error = await response.text();
+        this.logger.error(`❌ OpenAI API error (${response.status}) after ${elapsed}ms: ${error}`);
+        throw new Error(`OpenAI API error (${response.status}): ${error}`);
+      }
+
+      const data = await response.json();
+      const tokensUsed = data.usage?.total_tokens || 'unknown';
+      this.logger.log(`✅ OpenAI API Success: embeddings=${data.data.length}, tokens=${tokensUsed}, time=${elapsed}ms`);
+      return data.data.map((item: { embedding: number[] }) => item.embedding);
+    } catch (error) {
+      this.logger.error(`OpenAI embedding failed: ${error.message}`, error.stack);
+
+      // If it's a network error, provide more details
+      if (error.message?.includes('fetch failed')) {
+        throw new Error(`Network error calling OpenAI API. Please check your internet connection and API key. Details: ${error.message}`);
+      }
+
+      throw error;
     }
-
-    const data = await response.json();
-    return data.data.map((item: { embedding: number[] }) => item.embedding);
   }
 
   private async embedWithHuggingFace(texts: string[]): Promise<number[][]> {

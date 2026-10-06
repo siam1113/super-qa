@@ -1,0 +1,9 @@
+{
+  "request_id": "eb7dab0e-eb76-4bbf-a596-482db925f711",
+  "agent_type": "qae",
+  "skill": "build_test_matrix",
+  "inputs": {
+    "dimensions": {"browser": ["chromium", "firefox", "webkit"], "role": ["admin", "member"]},
+    "max_rows": 20
+  }
+}

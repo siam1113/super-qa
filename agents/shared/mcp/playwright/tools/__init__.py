@@ -28,6 +28,7 @@ from .interaction import (
     type_text,
 )
 from .capture import (
+    accessibility_snapshot,
     screenshot,
     get_console_logs,
     get_network_requests,
@@ -45,6 +46,7 @@ from .assertions import (
     expect_checked,
     expect_enabled,
     expect_attribute,
+    expect_download,
 )
 from .waiting import (
     wait_for_selector,
@@ -81,6 +83,7 @@ __all__ = [
     "press",
     "type_text",
     # Capture
+    "accessibility_snapshot",
     "screenshot",
     "get_console_logs",
     "get_network_requests",
@@ -97,6 +100,7 @@ __all__ = [
     "expect_checked",
     "expect_enabled",
     "expect_attribute",
+    "expect_download",
     # Waiting
     "wait_for_selector",
     "wait_for_navigation",

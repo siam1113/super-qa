@@ -8,6 +8,7 @@ import {
   RelationshipType,
   BusinessItemContent,
   ConfidenceLevel,
+  VerificationStatus,
 } from './entities/business-item.entity';
 import { GraphService, NodeType, RelationType } from '../graph/graph.service';
 
@@ -147,6 +148,33 @@ export class BusinessService {
     Object.assign(item, updates);
     const saved = await this.businessItemRepository.save(item);
     await this.syncToGraph(saved);
+    return saved;
+  }
+
+  async updateVerificationStatus(
+    id: string,
+    status: VerificationStatus,
+  ): Promise<BusinessItem> {
+    const item = await this.findOne(id);
+    item.verificationStatus = status;
+
+    // If verified, boost confidence to high (if not already)
+    if (status === 'verified' && item.confidence === 'inferred') {
+      item.confidence = 'high';
+    }
+
+    // If rejected, set confidence to low
+    if (status === 'rejected') {
+      item.confidence = 'low';
+    }
+
+    const saved = await this.businessItemRepository.save(item);
+    await this.syncToGraph(saved);
+
+    this.logger.log(
+      `Updated verification status for item ${id} to ${status}`,
+    );
+
     return saved;
   }
 

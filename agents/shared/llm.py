@@ -4,10 +4,34 @@ import logging
 from enum import Enum
 from typing import Optional, List, Any
 from dataclasses import dataclass
+from contextlib import contextmanager
+from contextvars import ContextVar
 
 from langchain_core.language_models.chat_models import BaseChatModel
 
 logger = logging.getLogger(__name__)
+_model_selection = ContextVar("agent_model_selection", default=None)
+_temperature_override = ContextVar("agent_temperature_override", default=None)
+MIN_TEMPERATURE = 0.0
+MAX_TEMPERATURE = 1.0
+
+
+@contextmanager
+def selected_model(agent_type, selection):
+    token = _model_selection.set((agent_type, selection) if selection else None)
+    try:
+        yield
+    finally:
+        _model_selection.reset(token)
+
+
+@contextmanager
+def temperature_override(agent_type, value):
+    token = _temperature_override.set((agent_type, value) if value is not None else None)
+    try:
+        yield
+    finally:
+        _temperature_override.reset(token)
 
 
 class LLMProvider(str, Enum):
@@ -26,6 +50,7 @@ class LLMConfig:
     max_tokens: Optional[int] = None
     api_key: Optional[str] = None
     base_url: Optional[str] = None  # For Ollama or custom endpoints
+    max_retries: Optional[int] = None
 
     @classmethod
     def from_env(cls, agent_type: str = "default") -> "LLMConfig":
@@ -52,6 +77,10 @@ class LLMConfig:
             os.getenv("LLM_PROVIDER", "openai")
         )
         provider = LLMProvider(provider_str.lower())
+        selected = _model_selection.get()
+        override = selected[1] if selected and selected[0] == agent_type else None
+        if override:
+            provider = LLMProvider(override["provider"])
 
         # Get model with fallbacks
         default_models = {
@@ -63,12 +92,17 @@ class LLMConfig:
             f"{prefix}_MODEL" if prefix else "LLM_MODEL",
             os.getenv("LLM_MODEL", default_models[provider])
         )
+        if override:
+            model = override["model"]
 
         # Get temperature
         temperature = float(os.getenv(
             f"{prefix}_TEMPERATURE" if prefix else "LLM_TEMPERATURE",
             os.getenv("LLM_TEMPERATURE", "0.7")
         ))
+        temp_override = _temperature_override.get()
+        if temp_override and temp_override[0] == agent_type and MIN_TEMPERATURE <= temp_override[1] <= MAX_TEMPERATURE:
+            temperature = temp_override[1]
 
         # Get max tokens
         max_tokens_str = os.getenv(
@@ -88,6 +122,10 @@ class LLMConfig:
         base_url = None
         if provider == LLMProvider.OLLAMA:
             base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+        elif provider == LLMProvider.OPENAI:
+            base_url = os.getenv("OPENAI_BASE_URL")
+        elif provider == LLMProvider.ANTHROPIC:
+            base_url = os.getenv("ANTHROPIC_BASE_URL")
 
         return cls(
             provider=provider,
@@ -148,6 +186,10 @@ def _create_openai_llm(config: LLMConfig) -> BaseChatModel:
         "temperature": config.temperature,
     }
 
+    if config.model.startswith(("o1", "o3", "o4", "gpt-5", "gpt-6")):
+        kwargs["temperature"] = None
+        kwargs["reasoning_effort"] = "none"
+
     if config.api_key:
         kwargs["api_key"] = config.api_key
 
@@ -157,6 +199,8 @@ def _create_openai_llm(config: LLMConfig) -> BaseChatModel:
     if config.base_url:
         kwargs["base_url"] = config.base_url
 
+    if config.max_retries is not None:
+        kwargs["max_retries"] = config.max_retries
     return ChatOpenAI(**kwargs)
 
 
@@ -178,6 +222,10 @@ def _create_anthropic_llm(config: LLMConfig) -> BaseChatModel:
     if config.max_tokens:
         kwargs["max_tokens"] = config.max_tokens
 
+    if config.max_retries is not None:
+        kwargs["max_retries"] = config.max_retries
+    if config.base_url:
+        kwargs["base_url"] = config.base_url
     return ChatAnthropic(**kwargs)
 
 

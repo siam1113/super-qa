@@ -4,6 +4,7 @@ import {
   ConnectorTestResult,
   ConnectorSyncResult,
   ConnectorDocument,
+  ConnectorProject,
   SyncOptions,
 } from './connector.interface';
 import { SourceConfig } from '../entities/source.entity';
@@ -37,7 +38,7 @@ export class JiraConnector extends BaseConnector {
       return {
         success: true,
         message: `Connected as ${myself.displayName || myself.emailAddress}`,
-        permissions: ['read:issues', 'write:issues'],
+        permissions: ['read:issues'],
       };
     } catch (error: unknown) {
       const err = error as Error;
@@ -110,5 +111,24 @@ export class JiraConnector extends BaseConnector {
   async getPermissions(config: SourceConfig): Promise<string[]> {
     const result = await this.testConnection(config);
     return result.permissions || [];
+  }
+
+  async listProjects(config: SourceConfig): Promise<ConnectorProject[]> {
+    const client = this.getClient(config);
+    const projects: ConnectorProject[] = [];
+    const maxResults = 50;
+    let startAt = 0;
+
+    for (;;) {
+      const page = await client.projects.searchProjects({ startAt, maxResults });
+      for (const project of page.values || []) {
+        projects.push({ key: project.key, name: project.name });
+      }
+      if (page.isLast || !page.values?.length) break;
+      startAt += maxResults;
+      if (startAt > 1000) break; // up to 1000 projects
+    }
+
+    return projects;
   }
 }

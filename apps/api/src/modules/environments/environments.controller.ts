@@ -29,6 +29,9 @@ export class EnvironmentsController {
         value: v.isSecret ? '********' : v.value,
       })),
       isDefault: env.isDefault,
+      baseUrl: env.baseUrl,
+      maxRetries: env.maxRetries,
+      retryDelayMs: env.retryDelayMs,
       createdAt: env.createdAt.toISOString(),
       updatedAt: env.updatedAt.toISOString(),
     }));
@@ -47,6 +50,9 @@ export class EnvironmentsController {
         value: v.isSecret ? '********' : v.value,
       })),
       isDefault: env.isDefault,
+      baseUrl: env.baseUrl,
+      maxRetries: env.maxRetries,
+      retryDelayMs: env.retryDelayMs,
       createdAt: env.createdAt.toISOString(),
       updatedAt: env.updatedAt.toISOString(),
     };
@@ -62,6 +68,9 @@ export class EnvironmentsController {
       color: env.color,
       variables: env.variables,
       isDefault: env.isDefault,
+      baseUrl: env.baseUrl,
+      maxRetries: env.maxRetries,
+      retryDelayMs: env.retryDelayMs,
       createdAt: env.createdAt.toISOString(),
       updatedAt: env.updatedAt.toISOString(),
     };
@@ -80,6 +89,9 @@ export class EnvironmentsController {
         value: v.isSecret ? '********' : v.value,
       })),
       isDefault: env.isDefault,
+      baseUrl: env.baseUrl,
+      maxRetries: env.maxRetries,
+      retryDelayMs: env.retryDelayMs,
       createdAt: env.createdAt.toISOString(),
       updatedAt: env.updatedAt.toISOString(),
     };

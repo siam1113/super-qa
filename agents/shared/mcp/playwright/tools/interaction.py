@@ -57,7 +57,10 @@ async def click(
     try:
         # Capture before screenshot
         if capture_before:
-            screenshot_before = await page.screenshot()
+            try:
+                screenshot_before = await page.screenshot()
+            except Exception:
+                pass
 
         # Build position if specified
         position = None
@@ -76,7 +79,10 @@ async def click(
 
         # Capture after screenshot
         if capture_after:
-            screenshot_after = await page.screenshot()
+            try:
+                screenshot_after = await page.screenshot()
+            except Exception:
+                pass
 
         duration_ms = int((time.time() - start_time) * 1000)
 
@@ -167,7 +173,10 @@ async def fill(
 
     try:
         if capture_before:
-            screenshot_before = await page.screenshot()
+            try:
+                screenshot_before = await page.screenshot()
+            except Exception:
+                pass
 
         await page.fill(
             selector,
@@ -177,7 +186,10 @@ async def fill(
         )
 
         if capture_after:
-            screenshot_after = await page.screenshot()
+            try:
+                screenshot_after = await page.screenshot()
+            except Exception:
+                pass
 
         duration_ms = int((time.time() - start_time) * 1000)
 
@@ -247,12 +259,18 @@ async def clear(
 
     try:
         if capture_before:
-            screenshot_before = await page.screenshot()
+            try:
+                screenshot_before = await page.screenshot()
+            except Exception:
+                pass
 
         await page.fill(selector, "", timeout=timeout)
 
         if capture_after:
-            screenshot_after = await page.screenshot()
+            try:
+                screenshot_after = await page.screenshot()
+            except Exception:
+                pass
 
         duration_ms = int((time.time() - start_time) * 1000)
 
@@ -324,7 +342,10 @@ async def select_option(
 
     try:
         if capture_before:
-            screenshot_before = await page.screenshot()
+            try:
+                screenshot_before = await page.screenshot()
+            except Exception:
+                pass
 
         # Select by value, label, or index
         if value is not None:
@@ -342,7 +363,10 @@ async def select_option(
             }
 
         if capture_after:
-            screenshot_after = await page.screenshot()
+            try:
+                screenshot_after = await page.screenshot()
+            except Exception:
+                pass
 
         duration_ms = int((time.time() - start_time) * 1000)
 
@@ -412,12 +436,18 @@ async def check(
 
     try:
         if capture_before:
-            screenshot_before = await page.screenshot()
+            try:
+                screenshot_before = await page.screenshot()
+            except Exception:
+                pass
 
         await page.check(selector, timeout=timeout, force=force)
 
         if capture_after:
-            screenshot_after = await page.screenshot()
+            try:
+                screenshot_after = await page.screenshot()
+            except Exception:
+                pass
 
         duration_ms = int((time.time() - start_time) * 1000)
 
@@ -485,12 +515,18 @@ async def uncheck(
 
     try:
         if capture_before:
-            screenshot_before = await page.screenshot()
+            try:
+                screenshot_before = await page.screenshot()
+            except Exception:
+                pass
 
         await page.uncheck(selector, timeout=timeout, force=force)
 
         if capture_after:
-            screenshot_after = await page.screenshot()
+            try:
+                screenshot_after = await page.screenshot()
+            except Exception:
+                pass
 
         duration_ms = int((time.time() - start_time) * 1000)
 
@@ -562,7 +598,10 @@ async def hover(
 
     try:
         if capture_before:
-            screenshot_before = await page.screenshot()
+            try:
+                screenshot_before = await page.screenshot()
+            except Exception:
+                pass
 
         position = None
         if position_x is not None and position_y is not None:
@@ -576,7 +615,10 @@ async def hover(
         )
 
         if capture_after:
-            screenshot_after = await page.screenshot()
+            try:
+                screenshot_after = await page.screenshot()
+            except Exception:
+                pass
 
         duration_ms = int((time.time() - start_time) * 1000)
 
@@ -698,7 +740,10 @@ async def press(
 
     try:
         if capture_before:
-            screenshot_before = await page.screenshot()
+            try:
+                screenshot_before = await page.screenshot()
+            except Exception:
+                pass
 
         await page.press(
             selector,
@@ -708,7 +753,10 @@ async def press(
         )
 
         if capture_after:
-            screenshot_after = await page.screenshot()
+            try:
+                screenshot_after = await page.screenshot()
+            except Exception:
+                pass
 
         duration_ms = int((time.time() - start_time) * 1000)
 
@@ -782,7 +830,10 @@ async def type_text(
 
     try:
         if capture_before:
-            screenshot_before = await page.screenshot()
+            try:
+                screenshot_before = await page.screenshot()
+            except Exception:
+                pass
 
         await page.type(
             selector,
@@ -792,7 +843,10 @@ async def type_text(
         )
 
         if capture_after:
-            screenshot_after = await page.screenshot()
+            try:
+                screenshot_after = await page.screenshot()
+            except Exception:
+                pass
 
         duration_ms = int((time.time() - start_time) * 1000)
 

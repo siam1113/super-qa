@@ -6,13 +6,12 @@ import {
   Param,
   Body,
   Res,
-  BadRequestException,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { OAuthService } from './oauth.service';
 
 class InitiateOAuthDto {
-  sourceName: string;
+  sourceName?: string;
   redirectUri?: string;
 }
 
@@ -30,15 +29,11 @@ export class OAuthController {
   ) {
     const { sourceName, redirectUri } = body;
 
-    if (!sourceName) {
-      throw new BadRequestException('sourceName is required');
-    }
-
     const frontendUrl = redirectUri || 'http://localhost:3000/sources';
 
     const { url, state } = this.oauthService.generateAuthorizationUrl(
       provider,
-      sourceName,
+      sourceName || '',
       frontendUrl,
     );
 

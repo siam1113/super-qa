@@ -1,0 +1,16 @@
+{
+  "origin": "https://staging.example.com",
+  "environment": "staging",
+  "revision": "reviewed-application-revision",
+  "leasePath": "/__qa/leases/{namespace}",
+  "routes": [
+    {"method": "GET", "path": "/__qa/app/{namespace}"},
+    {"method": "POST", "path": "/__qa/app/{namespace}/items"}
+  ],
+  "steps": [
+    {"operation": "goto", "path": "/__qa/app/{namespace}"},
+    {"operation": "fill", "selector": "#name", "value": "Synthetic QA item"},
+    {"operation": "click", "selector": "#save"},
+    {"operation": "assert", "selector": "#result", "expected": "Saved"}
+  ]
+}

@@ -153,13 +153,13 @@ export function TaskModal({ isOpen, onClose, onSave, agentType, task }: TaskModa
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="ui-backdrop absolute inset-0" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative bg-base border border-border rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+      <div role="dialog" aria-modal="true" aria-labelledby="task-modal-title" className="ui-dialog-panel relative w-full max-w-2xl max-h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-          <h2 className="text-lg font-semibold">
+          <h2 id="task-modal-title" className="text-lg font-semibold">
             {isEditing ? 'Edit Task' : 'Create Task'}
           </h2>
           <button
@@ -183,7 +183,7 @@ export function TaskModal({ isOpen, onClose, onSave, agentType, task }: TaskModa
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Enter task title..."
-                className="w-full px-4 py-2.5 bg-elevated border border-border rounded-lg text-sm outline-none focus:border-accent-blue transition-colors"
+                className="ui-field w-full text-sm"
                 autoFocus
               />
             </div>
@@ -196,7 +196,7 @@ export function TaskModal({ isOpen, onClose, onSave, agentType, task }: TaskModa
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Add a description..."
                 rows={4}
-                className="w-full px-4 py-2.5 bg-elevated border border-border rounded-lg text-sm outline-none focus:border-accent-blue transition-colors resize-none"
+                className="ui-field w-full text-sm resize-none"
               />
             </div>
 
@@ -232,7 +232,7 @@ export function TaskModal({ isOpen, onClose, onSave, agentType, task }: TaskModa
                   <select
                     value={status}
                     onChange={(e) => setStatus(e.target.value as TaskStatus)}
-                    className="w-full px-4 py-2.5 bg-elevated border border-border rounded-lg text-sm outline-none focus:border-accent-blue transition-colors"
+                    className="ui-field w-full text-sm"
                   >
                     {STATUS_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>

@@ -75,6 +75,24 @@ class ConsoleLog:
 
 
 @dataclass
+class DialogRecord:
+    """A JS dialog (alert/confirm/prompt) raised by the page and how it was handled."""
+    dialog_type: Literal["alert", "confirm", "prompt", "beforeunload"]
+    message: str
+    default_value: Optional[str] = None
+    accepted: bool = False
+    timestamp: datetime = field(default_factory=datetime.now)
+
+
+@dataclass
+class DownloadRecord:
+    """A file download triggered by the page."""
+    url: str
+    suggested_filename: str
+    timestamp: datetime = field(default_factory=datetime.now)
+
+
+@dataclass
 class NetworkRequest:
     """A network request captured from the browser."""
     url: str

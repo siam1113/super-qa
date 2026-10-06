@@ -54,7 +54,7 @@ export class OAuthService {
           authorizationUrl: 'https://auth.atlassian.com/authorize',
           tokenUrl: 'https://auth.atlassian.com/oauth/token',
           scopes: provider === 'jira'
-            ? ['read:jira-work', 'read:jira-user', 'write:jira-work', 'offline_access']
+            ? ['read:jira-work', 'read:jira-user', 'offline_access']
             : ['read:confluence-content.all', 'read:confluence-space.summary', 'offline_access'],
           callbackUrl: `${baseCallbackUrl}/api/sources/oauth/${provider}/callback`,
         };
@@ -263,7 +263,7 @@ export class OAuthService {
         baseUrl: site.url,
         cloudId: site.id,
         permissions: provider === 'jira'
-          ? ['read:jira-work', 'write:jira-work']
+          ? ['read:jira-work']
           : ['read:confluence-content.all'],
       };
     }

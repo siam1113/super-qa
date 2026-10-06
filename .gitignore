@@ -4,12 +4,17 @@ node_modules/
 # Build outputs
 dist/
 .next/
+.next-dev/
+.next-settings-e2e/
 out/
 
 # Environment
 .env
 .env.local
 .env.*.local
+.env.production
+!.env.production.example
+!.env.deploy.example
 
 # IDE
 .idea/
@@ -33,3 +38,6 @@ coverage/
 
 **/node_modules/
 
+# Local QA workflow artifacts
+agents/.qa-workflows/
+**/__pycache__/

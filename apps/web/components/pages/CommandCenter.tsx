@@ -32,6 +32,7 @@ import {
   ExternalLink,
   RefreshCw,
   Plus,
+  HelpCircle,
 } from 'lucide-react';
 import { TaskModal } from '@/components/TaskModal';
 
@@ -471,6 +472,12 @@ function TasksTab({
 }
 
 // Sessions Tab
+function sessionStatusIcon(status: string, title: string) {
+  if (status === 'needs_help') return <HelpCircle size={13} className="shrink-0 text-warning" aria-label={`${title}: needs help`} />;
+  if (status === 'running') return <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-success" aria-label={`${title}: active`} />;
+  return <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-text-secondary" aria-label={`${title}: inactive`} />;
+}
+
 function SessionsTab({ sessions, onRefresh }: { sessions: any[]; onRefresh: () => void }) {
   return (
     <div className="h-full flex flex-col">
@@ -496,7 +503,7 @@ function SessionsTab({ sessions, onRefresh }: { sessions: any[]; onRefresh: () =
                   <div className="flex items-center gap-3">
                     <AgentBadge agentType={session.agentType} />
                     <div>
-                      <div className="text-sm font-medium">Session {session.id.slice(0, 8)}...</div>
+                      <div className="flex items-center gap-1.5 text-sm font-medium">{sessionStatusIcon(session.status, `Session ${session.id.slice(0, 8)}`)}<span>Session {session.id.slice(0, 8)}...</span></div>
                       <div className="text-xs text-text-secondary">
                         {session.messageCount || 0} messages
                       </div>
@@ -779,7 +786,7 @@ export function CommandCenterPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold">Command Center</h1>
-            <p className="text-sm text-text-secondary">Manage all agent tasks and sessions in one place</p>
+            <p className="mt-1 text-sm leading-5 text-text-secondary">Manage all agent tasks and sessions in one place.</p>
           </div>
           <div className="flex items-center gap-2">
             <button

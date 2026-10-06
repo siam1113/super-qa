@@ -9,8 +9,6 @@ import {
   Server,
   Trash2,
   Edit2,
-  Eye,
-  EyeOff,
   Copy,
   Check,
   X,
@@ -19,9 +17,11 @@ import {
   AlertCircle,
   Loader2,
   Key,
+  RefreshCw,
+  Globe,
 } from 'lucide-react';
 
-const API_BASE = 'http://localhost:4000';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 const DEFAULT_COLORS = [
   '#3B82F6', // blue
@@ -43,7 +43,6 @@ function VariableRow({
   onUpdate: (key: string, updates: Partial<EnvironmentVariable>) => void;
   onDelete: (key: string) => void;
 }) {
-  const [showValue, setShowValue] = useState(false);
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editKey, setEditKey] = useState(variable.key);
@@ -57,7 +56,7 @@ function VariableRow({
 
   const handleSave = () => {
     if (editKey.trim()) {
-      onUpdate(variable.key, { key: editKey.trim(), value: editValue });
+      onUpdate(variable.key, { key: editKey.trim(), ...(variable.isSecret && !editValue ? {} : { value: editValue }) });
       setEditing(false);
     }
   };
@@ -80,7 +79,7 @@ function VariableRow({
         />
         <span className="text-text-secondary">=</span>
         <input
-          type={variable.isSecret && !showValue ? 'password' : 'text'}
+          type={variable.isSecret ? 'password' : 'text'}
           value={editValue}
           onChange={(e) => setEditValue(e.target.value)}
           placeholder="value"
@@ -104,27 +103,18 @@ function VariableRow({
       </div>
       <span className="text-text-secondary">=</span>
       <div className="flex-[2] font-mono text-sm truncate">
-        {variable.isSecret && !showValue ? '••••••••' : variable.value}
+        {variable.isSecret ? '••••••••' : variable.value}
       </div>
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        {variable.isSecret && (
-          <button
-            onClick={() => setShowValue(!showValue)}
-            className="p-1.5 hover:bg-elevated rounded text-text-secondary hover:text-text-primary"
-            title={showValue ? 'Hide value' : 'Show value'}
-          >
-            {showValue ? <EyeOff size={14} /> : <Eye size={14} />}
-          </button>
-        )}
-        <button
+        {!variable.isSecret && <button
           onClick={handleCopy}
           className="p-1.5 hover:bg-elevated rounded text-text-secondary hover:text-text-primary"
           title="Copy value"
         >
           {copied ? <Check size={14} className="text-success" /> : <Copy size={14} />}
-        </button>
+        </button>}
         <button
-          onClick={() => setEditing(true)}
+          onClick={() => { setEditValue(variable.isSecret ? '' : variable.value); setEditing(true); }}
           className="p-1.5 hover:bg-elevated rounded text-text-secondary hover:text-text-primary"
           title="Edit"
         >
@@ -181,7 +171,7 @@ function AddVariableRow({ onAdd }: { onAdd: (variable: EnvironmentVariable) => v
           'p-1.5 rounded transition-colors',
           isSecret ? 'bg-warning/10 text-warning' : 'hover:bg-elevated text-text-secondary'
         )}
-        title={isSecret ? 'Secret (encrypted)' : 'Mark as secret'}
+        title={isSecret ? 'Hide value in the interface' : 'Mark as secret'}
       >
         <Key size={16} />
       </button>
@@ -196,16 +186,158 @@ function AddVariableRow({ onAdd }: { onAdd: (variable: EnvironmentVariable) => v
   );
 }
 
+function RetryPolicyRow({
+  env,
+  onUpdate,
+}: {
+  env: Environment;
+  onUpdate: (id: string, updates: Partial<Environment>) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [maxRetries, setMaxRetries] = useState(env.maxRetries === null ? '' : String(env.maxRetries));
+  const [retryDelayMs, setRetryDelayMs] = useState(env.retryDelayMs === null ? '' : String(env.retryDelayMs));
+
+  const handleSave = () => {
+    onUpdate(env.id, {
+      maxRetries: maxRetries.trim() === '' ? null : Number(maxRetries),
+      retryDelayMs: retryDelayMs.trim() === '' ? null : Number(retryDelayMs),
+    });
+    setEditing(false);
+  };
+
+  const handleCancel = () => {
+    setMaxRetries(env.maxRetries === null ? '' : String(env.maxRetries));
+    setRetryDelayMs(env.retryDelayMs === null ? '' : String(env.retryDelayMs));
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <div className="flex flex-wrap items-center gap-3 p-2 bg-elevated rounded-lg">
+        <label className="flex items-center gap-1.5 text-xs text-text-secondary">
+          Max retries
+          <input
+            type="number" min={0} max={10} step={1} value={maxRetries}
+            onChange={(e) => setMaxRetries(e.target.value)}
+            placeholder="3 (default)"
+            className="w-24 px-2 py-1 bg-surface border border-border rounded text-sm font-mono outline-none focus:border-accent-blue"
+          />
+        </label>
+        <label className="flex items-center gap-1.5 text-xs text-text-secondary">
+          Delay (ms)
+          <input
+            type="number" min={0} max={60000} step={100} value={retryDelayMs}
+            onChange={(e) => setRetryDelayMs(e.target.value)}
+            placeholder="1000 (default)"
+            className="w-28 px-2 py-1 bg-surface border border-border rounded text-sm font-mono outline-none focus:border-accent-blue"
+          />
+        </label>
+        <button onClick={handleSave} className="p-1.5 hover:bg-success/10 rounded text-success" title="Save">
+          <Check size={16} />
+        </button>
+        <button onClick={handleCancel} className="p-1.5 hover:bg-danger/10 rounded text-danger" title="Cancel">
+          <X size={16} />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 p-2 bg-elevated rounded-lg group">
+      <RefreshCw size={14} className="text-text-secondary flex-shrink-0" />
+      <div className="flex-1 text-sm">
+        <span className="font-mono">{env.maxRetries ?? 'default'}</span>
+        <span className="text-text-secondary"> retries · </span>
+        <span className="font-mono">{env.retryDelayMs ?? 'default'}ms</span>
+        <span className="text-text-secondary"> delay between attempts</span>
+      </div>
+      <button
+        onClick={() => setEditing(true)}
+        className="p-1.5 hover:bg-elevated rounded text-text-secondary hover:text-text-primary opacity-0 group-hover:opacity-100 transition-opacity"
+        title="Edit retry policy"
+      >
+        <Edit2 size={14} />
+      </button>
+    </div>
+  );
+}
+
+function BaseUrlRow({
+  env,
+  onUpdate,
+}: {
+  env: Environment;
+  onUpdate: (id: string, updates: Partial<Environment>) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [baseUrl, setBaseUrl] = useState(env.baseUrl || '');
+
+  const handleSave = () => {
+    onUpdate(env.id, { baseUrl: baseUrl.trim() || null });
+    setEditing(false);
+  };
+
+  const handleCancel = () => {
+    setBaseUrl(env.baseUrl || '');
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <div className="flex flex-wrap items-center gap-3 p-2 bg-elevated rounded-lg">
+        <input
+          type="text" value={baseUrl}
+          onChange={(e) => setBaseUrl(e.target.value)}
+          placeholder="https://staging.example.com"
+          className="flex-1 min-w-[200px] px-2 py-1 bg-surface border border-border rounded text-sm font-mono outline-none focus:border-accent-blue"
+        />
+        <button onClick={handleSave} className="p-1.5 hover:bg-success/10 rounded text-success" title="Save">
+          <Check size={16} />
+        </button>
+        <button onClick={handleCancel} className="p-1.5 hover:bg-danger/10 rounded text-danger" title="Cancel">
+          <X size={16} />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 p-2 bg-elevated rounded-lg group">
+      <Globe size={14} className="text-text-secondary flex-shrink-0" />
+      <div className="flex-1 text-sm">
+        {env.baseUrl ? (
+          <span className="font-mono">{env.baseUrl}</span>
+        ) : (
+          <span className="text-text-secondary">No base URL set — agent runs start on a blank page unless the test case sets its own</span>
+        )}
+      </div>
+      <button
+        onClick={() => setEditing(true)}
+        className="p-1.5 hover:bg-elevated rounded text-text-secondary hover:text-text-primary opacity-0 group-hover:opacity-100 transition-opacity"
+        title="Edit base URL"
+      >
+        <Edit2 size={14} />
+      </button>
+    </div>
+  );
+}
+
 function EnvironmentCard({
   env,
   onUpdate,
   onDelete,
   onSetDefault,
+  onAddVariable,
+  onUpdateVariable,
+  onDeleteVariable,
 }: {
   env: Environment;
   onUpdate: (id: string, updates: Partial<Environment>) => void;
   onDelete: (id: string) => void;
   onSetDefault: (id: string) => void;
+  onAddVariable: (id: string, variable: EnvironmentVariable) => void;
+  onUpdateVariable: (id: string, key: string, updates: Partial<EnvironmentVariable>) => void;
+  onDeleteVariable: (id: string, key: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [editingName, setEditingName] = useState(false);
@@ -213,21 +345,11 @@ function EnvironmentCard({
   const [showMenu, setShowMenu] = useState(false);
 
   const handleUpdateVariable = (key: string, updates: Partial<EnvironmentVariable>) => {
-    const newVariables = env.variables.map((v) =>
-      v.key === key ? { ...v, ...updates } : v
-    );
-    // If key changed, check for the old key
-    if (updates.key && updates.key !== key) {
-      const idx = newVariables.findIndex((v) => v.key === key);
-      if (idx >= 0) {
-        newVariables[idx] = { ...newVariables[idx], ...updates };
-      }
-    }
-    onUpdate(env.id, { variables: newVariables });
+    onUpdateVariable(env.id, key, updates);
   };
 
   const handleDeleteVariable = (key: string) => {
-    onUpdate(env.id, { variables: env.variables.filter((v) => v.key !== key) });
+    onDeleteVariable(env.id, key);
   };
 
   const handleAddVariable = (variable: EnvironmentVariable) => {
@@ -236,7 +358,7 @@ function EnvironmentCard({
       alert(`Variable ${variable.key} already exists`);
       return;
     }
-    onUpdate(env.id, { variables: [...env.variables, variable] });
+    onAddVariable(env.id, variable);
   };
 
   const handleSaveName = () => {
@@ -350,6 +472,11 @@ function EnvironmentCard({
       {/* Variables */}
       {expanded && (
         <div className="px-4 pb-4 border-t border-border pt-4 space-y-2">
+          <p className="text-xs font-medium text-text-secondary">Base URL</p>
+          <BaseUrlRow env={env} onUpdate={onUpdate} />
+          <p className="pt-2 text-xs font-medium text-text-secondary">QAE test retry policy</p>
+          <RetryPolicyRow env={env} onUpdate={onUpdate} />
+          <p className="pt-2 text-xs font-medium text-text-secondary">Variables</p>
           {env.variables.length === 0 ? (
             <p className="text-sm text-text-secondary text-center py-4">
               No variables yet. Add your first variable below.
@@ -378,28 +505,30 @@ function CreateEnvironmentModal({
 }: {
   isOpen: boolean;
   onClose: () => void;
-  onCreate: (data: { name: string; description?: string; color: string }) => void;
+  onCreate: (data: { name: string; description?: string; color: string; baseUrl?: string }) => void;
 }) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [color, setColor] = useState(DEFAULT_COLORS[0]);
+  const [baseUrl, setBaseUrl] = useState('');
 
   if (!isOpen) return null;
 
   const handleCreate = () => {
     if (name.trim()) {
-      onCreate({ name: name.trim(), description: description.trim() || undefined, color });
+      onCreate({ name: name.trim(), description: description.trim() || undefined, color, baseUrl: baseUrl.trim() || undefined });
       setName('');
       setDescription('');
       setColor(DEFAULT_COLORS[0]);
+      setBaseUrl('');
       onClose();
     }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-md bg-surface border border-border rounded-xl shadow-2xl">
+      <div className="ui-backdrop absolute inset-0" onClick={onClose} />
+      <div role="dialog" aria-modal="true" aria-label="Create environment" className="ui-dialog-panel relative w-full max-w-md overflow-hidden">
         <div className="flex items-center justify-between p-4 border-b border-border">
           <h3 className="text-lg font-medium">Create Environment</h3>
           <button onClick={onClose} className="p-1 hover:bg-elevated rounded">
@@ -427,6 +556,17 @@ function CreateEnvironmentModal({
               placeholder="Brief description of this environment"
               className="w-full px-3 py-2 bg-elevated border border-border rounded-lg text-sm outline-none focus:border-accent-blue"
             />
+          </div>
+          <div>
+            <label className="block text-sm text-text-secondary mb-1">Base URL (optional)</label>
+            <input
+              type="text"
+              value={baseUrl}
+              onChange={(e) => setBaseUrl(e.target.value)}
+              placeholder="https://staging.example.com"
+              className="w-full px-3 py-2 bg-elevated border border-border rounded-lg text-sm font-mono outline-none focus:border-accent-blue"
+            />
+            <p className="mt-1 text-xs text-text-secondary">Where agent-driven test runs start. A test case can override this.</p>
           </div>
           <div>
             <label className="block text-sm text-text-secondary mb-2">Color</label>
@@ -457,12 +597,13 @@ function CreateEnvironmentModal({
   );
 }
 
-export function EnvironmentsPage() {
+export function EnvironmentsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [loadError, setLoadError] = useState('');
 
   const showNotification = (type: 'success' | 'error', message: string) => {
     setNotification({ type, message });
@@ -472,55 +613,12 @@ export function EnvironmentsPage() {
   const fetchEnvironments = useCallback(async () => {
     try {
       const response = await fetch(`${API_BASE}/api/environments`);
-      if (response.ok) {
-        const data = await response.json();
-        setEnvironments(data);
-      }
+      if (!response.ok) throw new Error(`Environment request failed (${response.status})`);
+      setEnvironments(await response.json());
+      setLoadError('');
     } catch (error) {
       console.error('Failed to fetch environments:', error);
-      // Use mock data for now
-      setEnvironments([
-        {
-          id: '1',
-          name: 'Development',
-          description: 'Local development environment',
-          color: '#10B981',
-          isDefault: true,
-          variables: [
-            { key: 'API_URL', value: 'http://localhost:4000', isSecret: false },
-            { key: 'DEBUG', value: 'true', isSecret: false },
-          ],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-        {
-          id: '2',
-          name: 'Staging',
-          description: 'Pre-production testing environment',
-          color: '#F59E0B',
-          isDefault: false,
-          variables: [
-            { key: 'API_URL', value: 'https://staging-api.example.com', isSecret: false },
-            { key: 'API_KEY', value: 'stg_xxxxxxxxxxxx', isSecret: true },
-          ],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-        {
-          id: '3',
-          name: 'Production',
-          description: 'Live production environment',
-          color: '#EF4444',
-          isDefault: false,
-          variables: [
-            { key: 'API_URL', value: 'https://api.example.com', isSecret: false },
-            { key: 'API_KEY', value: 'prod_xxxxxxxxxxxx', isSecret: true },
-            { key: 'DATABASE_URL', value: 'postgresql://...', isSecret: true },
-          ],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-      ]);
+      setLoadError(error instanceof Error ? error.message : 'Environment data is unavailable.');
     } finally {
       setLoading(false);
     }
@@ -530,7 +628,7 @@ export function EnvironmentsPage() {
     fetchEnvironments();
   }, [fetchEnvironments]);
 
-  const handleCreate = async (data: { name: string; description?: string; color: string }) => {
+  const handleCreate = async (data: { name: string; description?: string; color: string; baseUrl?: string }) => {
     try {
       const response = await fetch(`${API_BASE}/api/environments`, {
         method: 'POST',
@@ -542,34 +640,11 @@ export function EnvironmentsPage() {
         showNotification('success', 'Environment created');
         fetchEnvironments();
       } else {
-        // Fallback: add locally
-        const newEnv: Environment = {
-          id: Date.now().toString(),
-          name: data.name,
-          description: data.description || null,
-          color: data.color,
-          isDefault: environments.length === 0,
-          variables: [],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-        setEnvironments([...environments, newEnv]);
-        showNotification('success', 'Environment created (local)');
+        const body = await response.json().catch(() => null);
+        showNotification('error', body?.message || `Could not create environment (${response.status})`);
       }
     } catch (error) {
-      // Fallback: add locally
-      const newEnv: Environment = {
-        id: Date.now().toString(),
-        name: data.name,
-        description: data.description || null,
-        color: data.color,
-        isDefault: environments.length === 0,
-        variables: [],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      setEnvironments([...environments, newEnv]);
-      showNotification('success', 'Environment created (local)');
+      showNotification('error', error instanceof Error ? error.message : 'Could not create environment');
     }
   };
 
@@ -584,13 +659,36 @@ export function EnvironmentsPage() {
       if (response.ok) {
         fetchEnvironments();
       } else {
-        // Fallback: update locally
-        setEnvironments(environments.map((env) => (env.id === id ? { ...env, ...updates } : env)));
+        const body = await response.json().catch(() => null);
+        showNotification('error', body?.message || `Could not update environment (${response.status})`);
       }
     } catch (error) {
-      // Fallback: update locally
-      setEnvironments(environments.map((env) => (env.id === id ? { ...env, ...updates } : env)));
+      showNotification('error', error instanceof Error ? error.message : 'Could not update environment');
     }
+  };
+
+  const handleAddVariable = async (id: string, variable: EnvironmentVariable) => {
+    try {
+      const response = await fetch(`${API_BASE}/api/environments/${id}/variables`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(variable) });
+      if (!response.ok) throw new Error(`Could not add variable (${response.status})`);
+      showNotification('success', 'Variable added'); fetchEnvironments();
+    } catch (error) { showNotification('error', error instanceof Error ? error.message : 'Could not add variable'); }
+  };
+
+  const handleUpdateVariable = async (id: string, key: string, updates: Partial<EnvironmentVariable>) => {
+    try {
+      const response = await fetch(`${API_BASE}/api/environments/${id}/variables/${encodeURIComponent(key)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates) });
+      if (!response.ok) throw new Error(`Could not update variable (${response.status})`);
+      showNotification('success', 'Variable updated'); fetchEnvironments();
+    } catch (error) { showNotification('error', error instanceof Error ? error.message : 'Could not update variable'); }
+  };
+
+  const handleDeleteVariable = async (id: string, key: string) => {
+    try {
+      const response = await fetch(`${API_BASE}/api/environments/${id}/variables/${encodeURIComponent(key)}`, { method: 'DELETE' });
+      if (!response.ok) throw new Error(`Could not delete variable (${response.status})`);
+      showNotification('success', 'Variable deleted'); fetchEnvironments();
+    } catch (error) { showNotification('error', error instanceof Error ? error.message : 'Could not delete variable'); }
   };
 
   const handleDelete = async (id: string) => {
@@ -603,20 +701,18 @@ export function EnvironmentsPage() {
         showNotification('success', 'Environment deleted');
         fetchEnvironments();
       } else {
-        // Fallback: delete locally
-        setEnvironments(environments.filter((env) => env.id !== id));
-        showNotification('success', 'Environment deleted (local)');
+        const body = await response.json().catch(() => null);
+        showNotification('error', body?.message || `Could not delete environment (${response.status})`);
       }
     } catch (error) {
-      // Fallback: delete locally
-      setEnvironments(environments.filter((env) => env.id !== id));
-      showNotification('success', 'Environment deleted (local)');
+      showNotification('error', error instanceof Error ? error.message : 'Could not delete environment');
     }
   };
 
   const handleSetDefault = async (id: string) => {
     try {
-      await fetch(`${API_BASE}/api/environments/${id}/default`, { method: 'POST' });
+      const response = await fetch(`${API_BASE}/api/environments/${id}/default`, { method: 'POST' });
+      if (!response.ok) throw new Error(`Could not set default environment (${response.status})`);
       // Update locally
       setEnvironments(
         environments.map((env) => ({
@@ -626,14 +722,7 @@ export function EnvironmentsPage() {
       );
       showNotification('success', 'Default environment updated');
     } catch (error) {
-      // Fallback: update locally
-      setEnvironments(
-        environments.map((env) => ({
-          ...env,
-          isDefault: env.id === id,
-        }))
-      );
-      showNotification('success', 'Default environment updated (local)');
+      showNotification('error', error instanceof Error ? error.message : 'Could not set default environment');
     }
   };
 
@@ -666,11 +755,11 @@ export function EnvironmentsPage() {
       )}
 
       {/* Header */}
-      <div className="p-6 border-b border-border">
+      <div className={`${embedded ? 'p-4' : 'p-6'} border-b border-border`}>
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-2xl font-semibold">Environments</h1>
-            <p className="text-text-secondary">Manage environment configurations and variables</p>
+            <h1 className={embedded ? 'text-base font-semibold' : 'text-xl font-semibold'}>{embedded ? 'Environment profiles' : 'Environments'}</h1>
+            <p className="mt-1 text-sm leading-5 text-text-secondary">{embedded ? 'Secrets and variables are scoped to their target environment.' : 'Manage environment configurations and variables'}</p>
           </div>
           <button
             onClick={() => setShowCreateModal(true)}
@@ -696,6 +785,7 @@ export function EnvironmentsPage() {
 
       {/* Content */}
       <div className="flex-1 overflow-auto p-6">
+        {loadError && <div role="alert" className="mb-4 rounded-lg bg-danger/10 p-3 text-sm text-danger">{loadError}</div>}
         {filteredEnvironments.length === 0 ? (
           <div className="bg-surface border border-border rounded-xl p-12 text-center">
             <Server size={48} className="mx-auto mb-4 text-text-secondary" />
@@ -719,6 +809,9 @@ export function EnvironmentsPage() {
                 onUpdate={handleUpdate}
                 onDelete={handleDelete}
                 onSetDefault={handleSetDefault}
+                onAddVariable={handleAddVariable}
+                onUpdateVariable={handleUpdateVariable}
+                onDeleteVariable={handleDeleteVariable}
               />
             ))}
           </div>

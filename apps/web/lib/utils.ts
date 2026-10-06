@@ -12,6 +12,23 @@ export function formatDuration(seconds: number): string {
   return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
 }
 
+/** Formats a millisecond duration as ms/s/m/h, picking the coarsest unit that keeps
+ * the number readable (e.g. 850 -> "850ms", 4200 -> "4.2s", 125000 -> "2m 5s"). */
+export function formatMs(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  const totalSeconds = ms / 1000;
+  if (totalSeconds < 60) {
+    const rounded = Math.round(totalSeconds * 10) / 10;
+    return `${rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1)}s`;
+  }
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  const seconds = Math.round(totalSeconds % 60);
+  if (totalMinutes < 60) return seconds > 0 ? `${totalMinutes}m ${seconds}s` : `${totalMinutes}m`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+}
+
 export function formatRelativeTime(date: string | Date): string {
   const now = new Date();
   const then = new Date(date);
@@ -38,6 +55,8 @@ export function getStatusColor(status: string): string {
     pending: 'text-warning',
     approved: 'text-success',
     rejected: 'text-danger',
+    ready: 'text-info',
+    draft: 'text-text-secondary',
   };
   return colors[status] || 'text-text-secondary';
 }
@@ -52,6 +71,8 @@ export function getStatusBgColor(status: string): string {
     pending: 'bg-warning/10 text-warning',
     approved: 'bg-success/10 text-success',
     rejected: 'bg-danger/10 text-danger',
+    ready: 'bg-info/10 text-info',
+    draft: 'bg-text-secondary/10 text-text-secondary',
   };
   return colors[status] || 'bg-text-secondary/10 text-text-secondary';
 }

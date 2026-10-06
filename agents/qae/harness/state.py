@@ -1,4 +1,5 @@
 """Execution state management for the Agent Harness."""
+import json
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -27,6 +28,23 @@ class StepStatus(str, Enum):
     SKIPPED = "skipped"
 
 
+_OUTPUT_PAYLOAD_KEYS_TO_STRIP = ("screenshotBefore", "screenshotAfter", "screenshot")
+_OUTPUT_PREVIEW_MAX_CHARS = 2000
+
+
+def _safe_output(result: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """The raw tool result, minus screenshot payloads (base64, not useful as 'output'
+    text) and capped in size so a verbose get_page_content/accessibility_snapshot
+    doesn't blow up the trace. Mirrors executor._summarize_action_result's trimming."""
+    if not result:
+        return result
+    payload = {key: value for key, value in result.items() if key not in _OUTPUT_PAYLOAD_KEYS_TO_STRIP}
+    text = json.dumps(payload, default=str)
+    if len(text) <= _OUTPUT_PREVIEW_MAX_CHARS:
+        return payload
+    return {"truncated": True, "preview": text[:_OUTPUT_PREVIEW_MAX_CHARS] + "...(truncated)"}
+
+
 @dataclass
 class ActionRecord:
     """Record of a single MCP action within a step."""
@@ -44,6 +62,9 @@ class ActionRecord:
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     result: Optional[Dict[str, Any]] = None
+    # Token usage of the LLM call that decided on this action. Several actions can
+    # share the same usage when one model response requests multiple tool calls.
+    tokens_used: Optional[Dict[str, Optional[int]]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -52,6 +73,9 @@ class ActionRecord:
             "actionType": self.action_type,
             "selector": self.selector,
             "arguments": self.arguments,
+            "input": self.arguments,
+            "output": _safe_output(self.result),
+            "tokensUsed": self.tokens_used,
             "status": self.status,
             "durationMs": self.duration_ms,
             "screenshotBefore": self.screenshot_before,
@@ -135,6 +159,8 @@ class ExecutionState:
     all_screenshots: List[str] = field(default_factory=list)  # S3 keys
     all_console_logs: List[Dict[str, Any]] = field(default_factory=list)
     all_network_requests: List[Dict[str, Any]] = field(default_factory=list)
+    all_dialogs: List[Dict[str, Any]] = field(default_factory=list)
+    all_downloads: List[Dict[str, Any]] = field(default_factory=list)
 
     # Trace references
     trace_key: Optional[str] = None  # S3 key for full trace JSON
@@ -147,6 +173,10 @@ class ExecutionState:
     # Metadata
     metadata: Dict[str, Any] = field(default_factory=dict)
 
+    # Running total of LLM tokens spent across every action in this run, used to
+    # enforce a per-test cost budget (see TestExecutor.max_tokens_per_test).
+    total_tokens_used: int = 0
+
     @classmethod
     def create(
         cls,
@@ -155,10 +185,11 @@ class ExecutionState:
         environment: str,
         browser: str = "chromium",
         trace_level: str = "action",
+        run_id: Optional[str] = None,
     ) -> "ExecutionState":
         """Create a new execution state."""
         return cls(
-            run_id=f"RUN-{uuid.uuid4().hex[:8].upper()}",
+            run_id=run_id or f"RUN-{uuid.uuid4().hex[:8].upper()}",
             test_id=test_id,
             test_name=test_name,
             environment=environment,
@@ -234,6 +265,7 @@ class ExecutionState:
         action_type: str,
         selector: Optional[str] = None,
         arguments: Optional[Dict[str, Any]] = None,
+        tokens_used: Optional[Dict[str, Optional[int]]] = None,
     ) -> Optional[ActionRecord]:
         """Add an action to a step."""
         if 0 <= step_index < len(self.steps):
@@ -243,6 +275,7 @@ class ExecutionState:
                 action_type=action_type,
                 selector=selector,
                 arguments=arguments or {},
+                tokens_used=tokens_used,
                 started_at=datetime.now(),
             )
             step.actions.append(action)
@@ -270,6 +303,9 @@ class ExecutionState:
                 action.console_logs = result.get("consoleLogs", [])
                 action.network_requests = result.get("networkRequests", [])
                 action.result = result
+
+                if action.tokens_used:
+                    self.total_tokens_used += action.tokens_used.get("total") or 0
 
                 # Aggregate screenshots
                 if action.screenshot_before:
@@ -325,11 +361,14 @@ class ExecutionState:
             "screenshotCount": len(self.all_screenshots),
             "consoleLogCount": len(self.all_console_logs),
             "networkRequestCount": len(self.all_network_requests),
+            "dialogCount": len(self.all_dialogs),
+            "downloadCount": len(self.all_downloads),
             "traceKey": self.trace_key,
             "videoEnabled": self.video_enabled,
             "videoPath": self.video_path,
             "videoKey": self.video_key,
             "metadata": self.metadata,
+            "totalTokensUsed": self.total_tokens_used,
             "passedSteps": self.get_passed_steps(),
             "failedSteps": self.get_failed_steps(),
         }

@@ -22,6 +22,36 @@ import {
 } from 'lucide-react';
 
 const pageConfig: Record<string, { title: string; description: string; icon: React.ReactNode }> = {
+  'execution-plans': {
+    title: 'Execution Plans',
+    description: 'Build reusable plans that select test cases, data, and target environments.',
+    icon: <ClipboardList size={48} />,
+  },
+  frameworks: {
+    title: 'Setup',
+    description: 'Configure framework conventions, shared helpers, and automation defaults for this app.',
+    icon: <Code size={48} />,
+  },
+  'automated-tests': {
+    title: 'Automated Tests',
+    description: 'Browse runnable automated checks linked to app test cases and plans.',
+    icon: <Construction size={48} />,
+  },
+  'test-credentials': {
+    title: 'Test Credentials',
+    description: 'Configure secure credential references for this app’s test environments.',
+    icon: <KeyRound size={48} />,
+  },
+  reports: {
+    title: 'Reports',
+    description: 'Review execution outcomes and quality trends for this app.',
+    icon: <Construction size={48} />,
+  },
+  coverage: {
+    title: 'Coverage',
+    description: 'Review coverage between app requirements, test cases, and executions.',
+    icon: <Construction size={48} />,
+  },
   // Technical
   'technical-apis': {
     title: 'APIs',
@@ -61,7 +91,7 @@ const pageConfig: Record<string, { title: string; description: string; icon: Rea
     icon: <MousePointer size={48} />,
   },
   dom: {
-    title: 'DOM',
+    title: 'POM',
     description: 'Page objects, DOM trees, and element snapshots',
     icon: <Box size={48} />,
   },
@@ -71,7 +101,7 @@ const pageConfig: Record<string, { title: string; description: string; icon: Rea
     icon: <Crosshair size={48} />,
   },
   'data-setup': {
-    title: 'Data Setup',
+    title: 'Setup',
     description: 'Test data builders, factories, and fixtures',
     icon: <Database size={48} />,
   },
@@ -98,8 +128,8 @@ const pageConfig: Record<string, { title: string; description: string; icon: Rea
     icon: <Settings size={48} />,
   },
   context: {
-    title: 'Context Manager',
-    description: 'Knowledge graph, sources, and AI clarifications',
+    title: 'Knowledge',
+    description: 'Workspace sources and structured product knowledge',
     icon: <Brain size={48} />,
   },
 };
@@ -117,7 +147,7 @@ export function PlaceholderPage({ page }: { page: Page }) {
         <div className="w-24 h-24 rounded-2xl bg-elevated flex items-center justify-center mx-auto mb-6 text-text-secondary">
           {config.icon}
         </div>
-        <h1 className="text-2xl font-semibold mb-2">{config.title}</h1>
+        <h1 className="text-xl font-semibold mb-2">{config.title}</h1>
         <p className="text-text-secondary mb-6">{config.description}</p>
         <div className="flex items-center justify-center gap-2 text-sm text-warning bg-warning/10 px-4 py-2 rounded-lg">
           <Construction size={16} />
@@ -127,4 +157,3 @@ export function PlaceholderPage({ page }: { page: Page }) {
     </div>
   );
 }
-

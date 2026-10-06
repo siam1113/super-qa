@@ -13,7 +13,7 @@ export type SyncJobStatus = 'queued' | 'running' | 'completed' | 'failed' | 'can
 export type SyncJobStageStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
 export type SyncJobTrigger = 'manual' | 'scheduled' | 'webhook';
 
-export const SYNC_STAGES = ['pulling', 'processing', 'indexing', 'extracting'] as const;
+export const SYNC_STAGES = ['pulling', 'processing', 'indexing', 'extracting', 'populating'] as const;
 export type SyncStageName = (typeof SYNC_STAGES)[number];
 
 export interface SyncJobStage {
@@ -24,6 +24,13 @@ export interface SyncJobStage {
   itemsProcessed?: number;
   itemsTotal?: number;
   error?: string;
+  metadata?: {
+    model?: string;
+    tool?: string;
+    strategy?: string;
+    provider?: string;
+    [key: string]: any;
+  };
 }
 
 export interface SyncJobStats {
@@ -34,12 +41,20 @@ export interface SyncJobStats {
   businessItemsExtracted: number;
 }
 
+export interface SyncJobLog {
+  timestamp: string;
+  level: 'info' | 'warn' | 'error' | 'debug';
+  stage?: SyncStageName;
+  message: string;
+}
+
 // Descriptions for UI info tooltips
 export const STAGE_DESCRIPTIONS: Record<SyncStageName, string> = {
   pulling: 'Fetching documents from the connected source',
   processing: 'Parsing and preparing documents for indexing',
   indexing: 'Creating searchable index and embeddings',
   extracting: 'Extracting business knowledge from content',
+  populating: 'Saving extracted items to context database',
 };
 
 export const STATUS_DESCRIPTIONS: Record<SyncJobStatus, string> = {
@@ -54,6 +69,24 @@ export const STATUS_DESCRIPTIONS: Record<SyncJobStatus, string> = {
 export class SyncJob {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @Column({ default: 0 })
+  pipelineVersion: number;
+
+  @Column({ type: 'jsonb', nullable: true })
+  request: Record<string, any> | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  leaseToken: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  leaseUntil: Date | null;
+
+  @Column({ default: 0 })
+  attempts: number;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  nextAttemptAt: Date | null;
 
   @ManyToOne(() => Source, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'source_id' })
@@ -85,6 +118,12 @@ export class SyncJob {
 
   @Column({ type: 'text', nullable: true })
   errorMessage: string | null;
+
+  @Column({ type: 'jsonb', nullable: true })
+  metadata: Record<string, any> | null;
+
+  @Column({ type: 'jsonb', default: [] })
+  logs: SyncJobLog[];
 
   @Column({ type: 'timestamp', nullable: true })
   startedAt: Date | null;

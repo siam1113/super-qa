@@ -1,0 +1,15 @@
+{
+  "request_id": "c313ba3b-e8b0-476a-b3c7-2c90ccbe4c92",
+  "agent_type": "qae",
+  "skill": "explore_app",
+  "inputs": {
+    "target_id": "staging",
+    "mode": "live",
+    "max_pages": 5,
+    "max_depth": 1,
+    "max_commands": 60,
+    "authenticate": false,
+    "actions": []
+  },
+  "allow_model": false
+}

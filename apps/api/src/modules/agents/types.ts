@@ -1,7 +1,22 @@
 // Agent Types
 export type AgentType = 'qae' | 'aue' | 'superqa';
 
-export type AgentStatus = 'idle' | 'running' | 'paused' | 'error';
+export type AgentStatus = 'idle' | 'running' | 'paused' | 'error' | 'needs_help';
+
+export interface AgentModelSelection { provider: 'openai' | 'anthropic' | 'ollama'; model: string; }
+export interface AgentRuntimeSettings {
+  agentType: AgentType;
+  skills: Array<{ name: string; description: string; modelPolicy: string; toolNames: string[] }>;
+  tools: Array<{ name: string; description: string; access: 'agent' | 'workflow'; usedBy: string[] }>;
+  defaultModel: AgentModelSelection;
+  providers: Array<{ id: AgentModelSelection['provider']; models: string[]; error: string | null }>;
+  defaultMaxIterations: number;
+  minMaxIterations: number;
+  maxMaxIterations: number;
+  defaultTemperature: number;
+  minTemperature: number;
+  maxTemperature: number;
+}
 
 export interface AgentMessage {
   id: string;
@@ -54,7 +69,7 @@ export const AGENT_CONFIGS: Record<AgentType, AgentConfig> = {
   qae: {
     type: 'qae',
     name: 'QA Engineer Agent',
-    description: 'Performs manual QA tasks: test case design, exploratory testing, bug analysis',
+    description: 'QA planning, case design, exploration, execution, and evidence-based coverage analysis',
     systemPrompt: `You are an expert QA Engineer Agent (QAE). Your role is to:
 - Design comprehensive test cases from requirements
 - Perform exploratory testing analysis
@@ -73,11 +88,13 @@ When designing test cases, consider:
 
 Always provide structured, actionable recommendations.`,
     tools: [
-      'searchTestCases',
-      'searchRequirements',
-      'analyzeRisk',
-      'generateTestCases',
-      'searchBusinessRules',
+      'retrieve_source_evidence',
+      'list_skills',
+      'run_skill',
+      'get_skill_run',
+      'list_workflow_resources',
+      'get_execution_job',
+      'cancel_execution_job',
     ],
     model: 'gpt-4',
     temperature: 0.7,
@@ -105,11 +122,13 @@ When generating automation code:
 
 Support Playwright, Cypress, and Selenium frameworks.`,
     tools: [
-      'searchLocators',
-      'searchPageObjects',
-      'generateScript',
-      'analyzeFailure',
-      'searchActions',
+      'retrieve_source_evidence',
+      'list_skills',
+      'run_skill',
+      'get_skill_run',
+      'list_workflow_resources',
+      'get_execution_job',
+      'cancel_execution_job',
     ],
     model: 'gpt-4',
     temperature: 0.3,
@@ -133,20 +152,22 @@ Be concise but helpful. Use markdown formatting for clarity.
 Proactively suggest relevant actions. Ask clarifying questions when needed.
 Confirm destructive actions before executing.`,
     tools: [
-      'createTask',
-      'listTasks',
-      'startTask',
-      'completeTask',
-      'blockTask',
-      'listSources',
-      'startSync',
-      'checkSyncStatus',
-      'listEnvironments',
-      'createEnvironment',
-      'addEnvironmentVariable',
-      'searchKnowledge',
-      'getPlatformStats',
-      'getHelp',
+      'list_qa_skills',
+      'delegate_qa_skill',
+      'create_task',
+      'list_tasks',
+      'start_task',
+      'complete_task',
+      'block_task',
+      'list_sources',
+      'start_sync',
+      'check_sync_status',
+      'list_environments',
+      'create_environment',
+      'add_environment_variable',
+      'search_knowledge',
+      'get_platform_stats',
+      'get_help',
     ],
     model: 'gpt-4',
     temperature: 0.5,

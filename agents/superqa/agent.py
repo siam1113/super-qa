@@ -1,11 +1,12 @@
 """Super QA Agent - The all-powerful platform orchestrator using LangGraph."""
 from typing import Literal
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolMessage
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
 
 from shared.state import AgentState
 from shared.llm import create_llm
+from shared.narration import emit_status
 from superqa.tools import create_superqa_tools
 
 
@@ -58,6 +59,27 @@ SYSTEM_PROMPT = """You are Super QA - the all-powerful AI assistant for the QA A
 
 You are the command center of this platform. Help users accomplish their QA goals efficiently!"""
 
+SYSTEM_PROMPT += """
+
+For QA work, use list_qa_skills to discover the relevant QAE/AUE workflow and its input schema,
+then delegate_qa_skill with concrete inputs. QAE owns planning and case design; AUE owns
+framework inspection and automation authoring. They share exploration, execution, matrices,
+coverage, and failure analysis. Do not perform their specialist work yourself or invent missing
+inputs. Keep platform task/source/environment management in your platform tools.
+Prefer deterministic workflows. Allow model drafting only when semantic case design requires it.
+A completed workflow produced an artifact; only the execution harness can supply a test verdict.
+
+delegate_qa_skill runs one named, structured workflow and returns its artifact — reach for it
+first when the task fits a known skill. For anything more open-ended — a real back-and-forth,
+or several lines of investigation you want to run side by side — use start_agent_session to open
+a console session with QAE or AUE, ask_agent to converse in it (that agent reasons with its own
+full tools and judgment, not a shortcut), and read_agent_session to check on it; list_agent_sessions
+finds a session_id you opened earlier. You may hold multiple sessions open across QAE and AUE at
+once. qae_get_execution_job/qae_list_workflow_resources/qae_get_skill_run (and the aue_-prefixed
+equivalents) let you check job status, configured resources, and persisted artifacts for either
+role directly, without opening a session.
+"""
+
 
 def should_continue(state: AgentState) -> Literal["tools", "end"]:
     """Determine if we should continue to tools or end."""
@@ -72,7 +94,7 @@ def should_continue(state: AgentState) -> Literal["tools", "end"]:
     return "end"
 
 
-def call_model(state: AgentState) -> dict:
+async def call_model(state: AgentState) -> dict:
     """Call the LLM with the current state."""
     # Create LLM using the provider module (supports OpenAI, Anthropic, Ollama)
     model = create_llm(agent_type="superqa")
@@ -86,7 +108,18 @@ def call_model(state: AgentState) -> dict:
     if not messages or not isinstance(messages[0], SystemMessage):
         messages = [SystemMessage(content=SYSTEM_PROMPT)] + list(messages)
 
-    response = model_with_tools.invoke(messages)
+    # Stream and accumulate rather than ainvoke: lets LangGraph's "messages" stream
+    # mode surface real token deltas when the provider supports it, with identical
+    # output (an AIMessageChunk with merged tool_calls) when it doesn't.
+    if not state["messages"] or not isinstance(state["messages"][-1], ToolMessage):
+        # Only the first round-trip of a turn is genuinely silent dead air; a round
+        # that follows a tool call already has that tool's chip in front of it.
+        emit_status("Selecting the right skill…")
+    response = None
+    async for part in model_with_tools.astream(messages):
+        response = part if response is None else response + part
+    if response is None:
+        response = AIMessage(content="")
 
     return {"messages": [response]}
 
@@ -95,7 +128,9 @@ def create_superqa_agent() -> StateGraph:
     """Create the Super QA agent graph."""
     # Create tools
     tools = create_superqa_tools()
-    tool_node = ToolNode(tools)
+    # A bad tool call becomes a failed tool-call chip the model can see and recover
+    # from, instead of an uncaught exception that kills the whole turn.
+    tool_node = ToolNode(tools, handle_tool_errors=True)
 
     # Create graph
     workflow = StateGraph(AgentState)

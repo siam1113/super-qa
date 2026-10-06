@@ -3,8 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "NEXT_BUILD_DIR=.next-dev next dev",
     "build": "next build",
+    "build:settings-e2e": "NEXT_BUILD_DIR=.next-settings-e2e next build",
     "start": "next start",
     "lint": "next lint"
   },

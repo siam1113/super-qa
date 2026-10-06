@@ -10,7 +10,7 @@ export interface ConnectorAttachment {
 
 export interface ConnectorDocument {
   externalId: string;
-  type: 'requirement' | 'code' | 'issue' | 'pr' | 'wiki' | 'test_case' | 'api_spec' | 'comment';
+  type: 'requirement' | 'code' | 'issue' | 'pr' | 'wiki' | 'test_case' | 'api_spec' | 'comment' | 'file';
   title: string;
   content: string;
   url?: string;
@@ -40,6 +40,24 @@ export interface ConnectorSyncResult {
   totalAvailable?: number;    // Total documents available (if known)
 }
 
+export interface ConnectorRepository {
+  fullName: string;
+  private: boolean;
+  description: string | null;
+  updatedAt: string | null;
+  defaultBranch: string;
+}
+
+export interface ConnectorProject {
+  key: string;
+  name: string;
+}
+
+export interface ConnectorSpace {
+  key: string;
+  name: string;
+}
+
 export interface ISourceConnector {
   /**
    * Test the connection to the source
@@ -62,6 +80,18 @@ export interface ISourceConnector {
    * Handle incoming webhook payload (optional)
    */
   handleWebhook?(payload: any, headers: Record<string, string>): Promise<ConnectorDocument[]>;
+
+  /**
+   * List repositories/projects available to the stored credentials (optional,
+   * used to let the user pick a repository after connecting, or add more later)
+   */
+  listRepositories?(config: SourceConfig): Promise<ConnectorRepository[]>;
+
+  /** List Jira projects visible to the stored credentials (optional). */
+  listProjects?(config: SourceConfig): Promise<ConnectorProject[]>;
+
+  /** List Confluence spaces visible to the stored credentials (optional). */
+  listSpaces?(config: SourceConfig): Promise<ConnectorSpace[]>;
 }
 
 export abstract class BaseConnector implements ISourceConnector {

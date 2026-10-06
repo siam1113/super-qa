@@ -10,10 +10,20 @@
     "dev:web": "npm run dev -w apps/web",
     "dev:api": "npm run start:dev -w apps/api",
     "build": "npm run build -w apps/web && npm run build -w apps/api",
-    "lint": "npm run lint --workspaces --if-present"
+    "lint": "npm run lint --workspaces --if-present",
+    "cleanup:context": "ts-node --project scripts/tsconfig.json scripts/cleanup-context.ts"
   },
   "devDependencies": {
+    "@types/node": "^26.1.2",
     "npm-run-all": "^4.1.5",
+    "pg": "^8.22.0",
+    "ts-node": "^10.9.2",
+    "typeorm": "^1.1.0",
     "typescript": "^5.5.4"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.115.0",
+    "@nestjs/event-emitter": "^3.1.0",
+    "openai": "^7.1.0"
   }
 }

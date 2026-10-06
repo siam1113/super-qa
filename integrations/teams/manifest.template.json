@@ -1,0 +1,40 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.20/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.20",
+  "version": "{{TEAMS_APP_VERSION}}",
+  "id": "{{TEAMS_APP_ID}}",
+  "developer": {
+    "name": "Super QA",
+    "websiteUrl": "https://{{APP_DOMAIN}}",
+    "privacyUrl": "https://{{APP_DOMAIN}}/privacy",
+    "termsOfUseUrl": "https://{{APP_DOMAIN}}/terms"
+  },
+  "name": {
+    "short": "Super QA",
+    "full": "Super QA Quality Engineering Assistant"
+  },
+  "description": {
+    "short": "Quality engineering assistant for Teams",
+    "full": "Connect a Super QA agent to selected Teams conversations. Conversation access is enabled by an organization owner."
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "accentColor": "#2563EB",
+  "bots": [
+    {
+      "botId": "{{TEAMS_APP_ID}}",
+      "scopes": [
+        "personal",
+        "team",
+        "groupChat"
+      ],
+      "isNotificationOnly": false,
+      "supportsFiles": false
+    }
+  ],
+  "validDomains": [
+    "{{APP_DOMAIN}}"
+  ]
+}

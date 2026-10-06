@@ -41,6 +41,8 @@ export type BusinessItemType =
 
 export type ConfidenceLevel = 'high' | 'medium' | 'low' | 'inferred';
 
+export type VerificationStatus = 'unverified' | 'verified' | 'rejected';
+
 @Entity('business_items')
 export class BusinessItem {
   @PrimaryGeneratedColumn('uuid')
@@ -60,6 +62,9 @@ export class BusinessItem {
 
   @Column({ type: 'varchar', length: 20, default: 'inferred' })
   confidence: ConfidenceLevel;
+
+  @Column({ type: 'varchar', length: 20, default: 'unverified' })
+  verificationStatus: VerificationStatus;
 
   @Column({ type: 'simple-array', default: '' })
   tags: string[];

@@ -3,6 +3,7 @@ import {
   ConnectorTestResult,
   ConnectorSyncResult,
   ConnectorDocument,
+  ConnectorSpace,
   SyncOptions,
 } from './connector.interface';
 import { SourceConfig } from '../entities/source.entity';
@@ -167,5 +168,30 @@ export class ConfluenceConnector extends BaseConnector {
   async getPermissions(config: SourceConfig): Promise<string[]> {
     const result = await this.testConnection(config);
     return result.permissions || [];
+  }
+
+  async listSpaces(config: SourceConfig): Promise<ConnectorSpace[]> {
+    const baseUrl = this.getBaseUrl(config);
+    const headers = this.getHeaders(config);
+    const spaces: ConnectorSpace[] = [];
+    const limit = 100;
+    let start = 0;
+
+    for (;;) {
+      const response = await fetch(`${baseUrl}/wiki/rest/api/space?start=${start}&limit=${limit}`, { headers });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`HTTP ${response.status}: ${text}`);
+      }
+      const data: { results: { key: string; name: string }[]; _links?: { next?: string } } = await response.json();
+      for (const space of data.results || []) {
+        spaces.push({ key: space.key, name: space.name });
+      }
+      if (!data._links?.next || !data.results?.length) break;
+      start += limit;
+      if (start > 1000) break; // up to 1000 spaces
+    }
+
+    return spaces;
   }
 }

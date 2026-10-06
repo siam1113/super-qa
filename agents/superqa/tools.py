@@ -1,10 +1,148 @@
 """Tools for the Super QA agent to control the platform."""
 import os
+import json
 import httpx
 from langchain_core.tools import tool
 from typing import Literal
 
 BACKEND_URL = os.getenv("BACKEND_API_URL", "http://localhost:4000/api")
+# Self-referential base URL for this same FastAPI process, so SuperQA can hold a real
+# conversational turn with QAE/AUE's own chat endpoint (full system prompt, tools, and
+# reasoning loop) rather than only the narrower, skill-only delegate_qa_skill shortcut.
+AGENTS_SELF_URL = os.getenv("AGENTS_SELF_URL", f"http://localhost:{os.getenv('PORT', '8000')}")
+
+
+@tool
+def list_qa_skills(agent_type: Literal["qae", "aue"], skill_name: str = "") -> str:
+    """List an expert's QA skills; provide skill_name to retrieve its exact input schema."""
+    from shared.skills.registry import catalog, get_skill
+    if skill_name:
+        return json.dumps(get_skill(skill_name, agent_type).manifest())
+    return json.dumps([{key: value for key, value in skill.items() if key != "input_schema"}
+                       for skill in catalog(agent_type)])
+
+
+@tool
+async def delegate_qa_skill(agent_type: Literal["qae", "aue"], skill_name: str, inputs: dict,
+                            request_id: str = "", allow_model: bool = False) -> str:
+    """Delegate a bounded skill request to QAE/AUE. Discover its schema first; reuse request_id on retries."""
+    from uuid import uuid4
+    from shared.skills.contracts import SkillRequest, requires_request_id
+    from shared.skills.registry import get_skill
+    from qae.agent import create_qae_agent
+    from aue.agent import create_aue_agent
+    skill = get_skill(skill_name, agent_type)
+    if requires_request_id(skill_name, inputs) and not request_id:
+        raise ValueError("Browser execution, login, and interactions require a stable request_id UUID")
+    request = SkillRequest(request_id=request_id or str(uuid4()), agent_type=agent_type, skill=skill_name,
+                           inputs=inputs, allow_model=allow_model)
+    from langgraph.config import get_stream_writer
+    expert = create_qae_agent() if agent_type == "qae" else create_aue_agent()
+    state = {"messages": [], "agent_type": agent_type, "skill_request": request.model_dump(mode="json")}
+    try:
+        writer = get_stream_writer()
+    except RuntimeError:
+        def writer(_chunk):
+            return None
+    async for mode, chunk in expert.astream(state, stream_mode=["updates", "custom"]):
+        if mode == "custom":
+            writer(chunk)
+            continue
+        for update in chunk.values():
+            state.update(update)
+    return json.dumps(state["skill_result"], ensure_ascii=False)
+
+
+# ============ Console-Session Delegation Tools ============
+#
+# delegate_qa_skill (above) invokes one named, structured skill and skips straight
+# past QAE/AUE's own system prompt and reasoning loop. These tools instead open a
+# real console session against QAE/AUE's actual chat endpoint — the same one their
+# own UI uses — so SuperQA can hold a free-form conversational back-and-forth, run
+# several sessions concurrently, and read any of them back on demand.
+
+@tool
+async def start_agent_session(agent_type: Literal["qae", "aue"]) -> str:
+    """Start a new console session with QAE or AUE for free-form delegation.
+
+    Use this (not delegate_qa_skill) when you need an open-ended conversation rather
+    than one named structured workflow. Returns a session_id to use with ask_agent
+    and read_agent_session. You may hold several sessions open at once.
+    """
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        try:
+            response = await client.post(f"{AGENTS_SELF_URL}/agents/{agent_type}/sessions")
+            if response.status_code not in (200, 201):
+                return f"❌ Failed to start a {agent_type.upper()} session: {response.text}"
+            session = response.json()
+            return f"✅ Started a {agent_type.upper()} console session.\n\n**session_id:** {session['id']}"
+        except Exception as e:
+            return f"❌ Error starting {agent_type.upper()} session: {str(e)}"
+
+
+@tool
+async def ask_agent(agent_type: Literal["qae", "aue"], session_id: str, message: str) -> str:
+    """Send a message into an open QAE/AUE console session and return its reply.
+
+    The target agent reasons with its own full system prompt, tools, and skills —
+    this is a real conversational turn, not a shortcut. Use start_agent_session first
+    to get a session_id. Expect this to take longer than a simple platform tool call
+    when the agent needs to use tools itself.
+    """
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        try:
+            response = await client.post(
+                f"{AGENTS_SELF_URL}/agents/{agent_type}/chat",
+                json={"message": message, "sessionId": session_id},
+            )
+            if response.status_code == 403:
+                return f"❌ That session_id does not belong to {agent_type.upper()}; start a new session for this agent type."
+            if response.status_code != 200:
+                return f"❌ {agent_type.upper()} session error: {response.text}"
+            data = response.json()
+            return data.get("response", "")
+        except Exception as e:
+            return f"❌ Error messaging {agent_type.upper()} session: {str(e)}"
+
+
+@tool
+async def read_agent_session(session_id: str) -> str:
+    """Read the full transcript of a QAE/AUE console session started with start_agent_session."""
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        try:
+            response = await client.get(f"{AGENTS_SELF_URL}/sessions/{session_id}")
+            if response.status_code == 404:
+                return "❌ Session not found. It may have expired or the ID is wrong."
+            if response.status_code != 200:
+                return f"❌ Error reading session: {response.text}"
+            session = response.json()
+            lines = [f"**{session['agentType'].upper()} session** · status: {session['status']}\n"]
+            for message in session.get("messages", []):
+                role = message.get("role", "?")
+                lines.append(f"**{role}:** {message.get('content', '')}")
+            return "\n\n".join(lines) if len(lines) > 1 else "This session has no messages yet."
+        except Exception as e:
+            return f"❌ Error reading session: {str(e)}"
+
+
+@tool
+async def list_agent_sessions(agent_type: Literal["qae", "aue", "all"] = "all") -> str:
+    """List open/recent QAE/AUE console sessions, so you can find a session_id you started earlier."""
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        try:
+            agent_types = ["qae", "aue"] if agent_type == "all" else [agent_type]
+            lines = []
+            for current in agent_types:
+                response = await client.get(f"{AGENTS_SELF_URL}/agents/{current}/sessions")
+                if response.status_code != 200:
+                    continue
+                for session in response.json():
+                    lines.append(f"- **{current.upper()}** · `{session['id']}` · {session['status']} · {session.get('messageCount', 0)} message(s)")
+            if not lines:
+                return "No open console sessions found."
+            return "**Console sessions:**\n\n" + "\n".join(lines)
+        except Exception as e:
+            return f"❌ Error listing sessions: {str(e)}"
 
 
 # ============ Task Management Tools ============
@@ -614,9 +752,31 @@ I can help you with anything on this platform! Here are the main areas:
 Type `get_help("topic")` for detailed help on: tasks, agents, sources, environments"""
 
 
+def _role_scoped_job_tools(role: str) -> list:
+    """The create_skill_tools(role) extras not already covered, generically across
+    both roles, by list_qa_skills/delegate_qa_skill above: per-run artifact lookup,
+    configured-resource discovery, and execution-job status/cancel. list_skills and
+    run_skill are deliberately excluded — list_qa_skills/delegate_qa_skill already do
+    that same job for either role via an agent_type parameter, and including both
+    would register two differently-scoped tools under the identical names
+    "list_skills"/"run_skill", colliding when QAE's and AUE's sets are combined."""
+    from shared.skills.tools import create_skill_tools
+    extras = {"get_skill_run", "list_workflow_resources", "get_execution_job", "cancel_execution_job"}
+    return [tool.model_copy(update={"name": f"{role}_{tool.name}"}) for tool in create_skill_tools(role) if tool.name in extras]
+
+
 def create_superqa_tools() -> list:
-    """Create tools list for Super QA agent."""
+    """Create tools list for Super QA agent: platform tools plus full QAE/AUE access —
+    the structured skill shortcut, real console-session delegation, and QAE/AUE's own
+    job-status/resource-discovery tools, role-prefixed so both sets coexist."""
     return [
+        list_qa_skills,
+        delegate_qa_skill,
+        # Console-session delegation (free-form, concurrent, readable-back)
+        start_agent_session,
+        ask_agent,
+        read_agent_session,
+        list_agent_sessions,
         # Task Management
         create_task,
         list_tasks,
@@ -635,4 +795,7 @@ def create_superqa_tools() -> list:
         search_knowledge,
         get_platform_stats,
         get_help,
+        # QAE + AUE's own job-status/resource-discovery tools, role-prefixed
+        *_role_scoped_job_tools("qae"),
+        *_role_scoped_job_tools("aue"),
     ]

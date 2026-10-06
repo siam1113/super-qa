@@ -38,6 +38,7 @@ async def expect_visible(
     if not page:
         return {
             "passed": False,
+            "status": ActionStatus.ERROR.value,
             "assertionType": "visible",
             "errorMessage": f"Page not found: {page_id}",
         }
@@ -52,6 +53,7 @@ async def expect_visible(
 
         result = {
             "passed": True,
+            "status": ActionStatus.SUCCESS.value,
             "assertionType": "visible",
             "selector": selector,
             "expected": "visible",
@@ -73,6 +75,7 @@ async def expect_visible(
 
         result = {
             "passed": False,
+            "status": ActionStatus.FAILED.value,
             "assertionType": "visible",
             "selector": selector,
             "expected": "visible",
@@ -117,6 +120,7 @@ async def expect_hidden(
     if not page:
         return {
             "passed": False,
+            "status": ActionStatus.ERROR.value,
             "assertionType": "hidden",
             "errorMessage": f"Page not found: {page_id}",
         }
@@ -131,6 +135,7 @@ async def expect_hidden(
 
         result = {
             "passed": True,
+            "status": ActionStatus.SUCCESS.value,
             "assertionType": "hidden",
             "selector": selector,
             "expected": "hidden",
@@ -150,6 +155,7 @@ async def expect_hidden(
 
         result = {
             "passed": False,
+            "status": ActionStatus.FAILED.value,
             "assertionType": "hidden",
             "selector": selector,
             "expected": "hidden",
@@ -199,6 +205,7 @@ async def expect_text(
     if not page:
         return {
             "passed": False,
+            "status": ActionStatus.ERROR.value,
             "assertionType": "text",
             "errorMessage": f"Page not found: {page_id}",
         }
@@ -226,6 +233,7 @@ async def expect_text(
 
         result = {
             "passed": True,
+            "status": ActionStatus.SUCCESS.value,
             "assertionType": "text",
             "selector": selector,
             "expected": expected_text,
@@ -254,6 +262,7 @@ async def expect_text(
 
         result = {
             "passed": False,
+            "status": ActionStatus.FAILED.value,
             "assertionType": "text",
             "selector": selector,
             "expected": expected_text,
@@ -301,6 +310,7 @@ async def expect_value(
     if not page:
         return {
             "passed": False,
+            "status": ActionStatus.ERROR.value,
             "assertionType": "value",
             "errorMessage": f"Page not found: {page_id}",
         }
@@ -316,6 +326,7 @@ async def expect_value(
 
         result = {
             "passed": True,
+            "status": ActionStatus.SUCCESS.value,
             "assertionType": "value",
             "selector": selector,
             "expected": expected_value,
@@ -342,6 +353,7 @@ async def expect_value(
 
         result = {
             "passed": False,
+            "status": ActionStatus.FAILED.value,
             "assertionType": "value",
             "selector": selector,
             "expected": expected_value,
@@ -385,6 +397,7 @@ async def expect_url(
     if not page:
         return {
             "passed": False,
+            "status": ActionStatus.ERROR.value,
             "assertionType": "url",
             "errorMessage": f"Page not found: {page_id}",
         }
@@ -404,6 +417,7 @@ async def expect_url(
 
         result = {
             "passed": True,
+            "status": ActionStatus.SUCCESS.value,
             "assertionType": "url",
             "expected": url_pattern,
             "actual": page.url,
@@ -423,6 +437,7 @@ async def expect_url(
 
         result = {
             "passed": False,
+            "status": ActionStatus.FAILED.value,
             "assertionType": "url",
             "expected": url_pattern,
             "actual": page.url,
@@ -466,6 +481,7 @@ async def expect_title(
     if not page:
         return {
             "passed": False,
+            "status": ActionStatus.ERROR.value,
             "assertionType": "title",
             "errorMessage": f"Page not found: {page_id}",
         }
@@ -486,6 +502,7 @@ async def expect_title(
 
         result = {
             "passed": True,
+            "status": ActionStatus.SUCCESS.value,
             "assertionType": "title",
             "expected": title_pattern,
             "actual": actual_title,
@@ -505,6 +522,7 @@ async def expect_title(
 
         result = {
             "passed": False,
+            "status": ActionStatus.FAILED.value,
             "assertionType": "title",
             "expected": title_pattern,
             "actual": actual_title,
@@ -549,6 +567,7 @@ async def expect_element_count(
     if not page:
         return {
             "passed": False,
+            "status": ActionStatus.ERROR.value,
             "assertionType": "elementCount",
             "errorMessage": f"Page not found: {page_id}",
         }
@@ -564,6 +583,7 @@ async def expect_element_count(
 
         result = {
             "passed": True,
+            "status": ActionStatus.SUCCESS.value,
             "assertionType": "elementCount",
             "selector": selector,
             "expected": expected_count,
@@ -589,6 +609,7 @@ async def expect_element_count(
 
         result = {
             "passed": False,
+            "status": ActionStatus.FAILED.value,
             "assertionType": "elementCount",
             "selector": selector,
             "expected": expected_count,
@@ -634,6 +655,7 @@ async def expect_checked(
     if not page:
         return {
             "passed": False,
+            "status": ActionStatus.ERROR.value,
             "assertionType": "checked",
             "errorMessage": f"Page not found: {page_id}",
         }
@@ -653,6 +675,7 @@ async def expect_checked(
 
         result = {
             "passed": True,
+            "status": ActionStatus.SUCCESS.value,
             "assertionType": "checked",
             "selector": selector,
             "expected": checked,
@@ -678,6 +701,7 @@ async def expect_checked(
 
         result = {
             "passed": False,
+            "status": ActionStatus.FAILED.value,
             "assertionType": "checked",
             "selector": selector,
             "expected": checked,
@@ -723,6 +747,7 @@ async def expect_enabled(
     if not page:
         return {
             "passed": False,
+            "status": ActionStatus.ERROR.value,
             "assertionType": "enabled",
             "errorMessage": f"Page not found: {page_id}",
         }
@@ -742,6 +767,7 @@ async def expect_enabled(
 
         result = {
             "passed": True,
+            "status": ActionStatus.SUCCESS.value,
             "assertionType": "enabled",
             "selector": selector,
             "expected": enabled,
@@ -767,6 +793,7 @@ async def expect_enabled(
 
         result = {
             "passed": False,
+            "status": ActionStatus.FAILED.value,
             "assertionType": "enabled",
             "selector": selector,
             "expected": enabled,
@@ -814,6 +841,7 @@ async def expect_attribute(
     if not page:
         return {
             "passed": False,
+            "status": ActionStatus.ERROR.value,
             "assertionType": "attribute",
             "errorMessage": f"Page not found: {page_id}",
         }
@@ -840,6 +868,7 @@ async def expect_attribute(
 
         result = {
             "passed": True,
+            "status": ActionStatus.SUCCESS.value,
             "assertionType": "attribute",
             "selector": selector,
             "attribute": attribute,
@@ -866,6 +895,7 @@ async def expect_attribute(
 
         result = {
             "passed": False,
+            "status": ActionStatus.FAILED.value,
             "assertionType": "attribute",
             "selector": selector,
             "attribute": attribute,
@@ -884,3 +914,95 @@ async def expect_attribute(
                 pass
 
         return result
+
+
+async def expect_download(
+    page_id: str,
+    filename_pattern: Optional[str] = None,
+    timeout: int = 5000,
+) -> Dict[str, Any]:
+    """
+    Assert that a file download occurred (optionally matching a filename pattern).
+
+    Checks downloads already captured on this page (BrowserManager records every
+    download via a page.on("download") listener) and, if none match yet, waits up
+    to `timeout` for one to occur.
+
+    Args:
+        page_id: The page to check for downloads
+        filename_pattern: Optional regex (falls back to substring match) against
+            the download's suggested filename; omit to accept any download
+        timeout: Maximum additional time to wait for a new download, in milliseconds
+
+    Returns:
+        Assertion result with pass/fail status
+    """
+    manager = get_browser_manager()
+    page = manager.get_page(page_id)
+
+    if not page:
+        return {
+            "passed": False,
+            "status": ActionStatus.ERROR.value,
+            "assertionType": "download",
+            "errorMessage": f"Page not found: {page_id}",
+        }
+
+    start_time = time.time()
+
+    def _matches(filename: str) -> bool:
+        if not filename_pattern:
+            return True
+        try:
+            return bool(re.search(filename_pattern, filename))
+        except re.error:
+            return filename_pattern in filename
+
+    existing = [d for d in manager.get_downloads(page_id) if _matches(d.suggested_filename)]
+    if existing:
+        match = existing[-1]
+        return {
+            "passed": True,
+            "status": ActionStatus.SUCCESS.value,
+            "assertionType": "download",
+            "expected": filename_pattern or "any file",
+            "actual": match.suggested_filename,
+            "url": match.url,
+            "durationMs": 0,
+            "timestamp": datetime.now().isoformat(),
+        }
+
+    try:
+        download = await page.wait_for_event(
+            "download",
+            predicate=(lambda d: _matches(d.suggested_filename)) if filename_pattern else None,
+            timeout=timeout,
+        )
+        duration_ms = int((time.time() - start_time) * 1000)
+
+        logger.info(f"Assert download passed: {download.suggested_filename}")
+        return {
+            "passed": True,
+            "status": ActionStatus.SUCCESS.value,
+            "assertionType": "download",
+            "expected": filename_pattern or "any file",
+            "actual": download.suggested_filename,
+            "url": download.url,
+            "durationMs": duration_ms,
+            "timestamp": datetime.now().isoformat(),
+        }
+
+    except Exception as e:
+        duration_ms = int((time.time() - start_time) * 1000)
+
+        logger.warning(f"Assert download failed: {e}")
+        return {
+            "passed": False,
+            "status": ActionStatus.FAILED.value,
+            "assertionType": "download",
+            "expected": filename_pattern or "any file",
+            "actual": None,
+            "errorMessage": str(e),
+            "durationMs": duration_ms,
+            "timestamp": datetime.now().isoformat(),
+        }

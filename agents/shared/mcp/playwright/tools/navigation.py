@@ -62,7 +62,10 @@ async def goto(
 
         # Capture after screenshot
         if capture_after:
-            screenshot_after = await page.screenshot()
+            try:
+                screenshot_after = await page.screenshot()
+            except Exception:
+                pass
 
         duration_ms = int((time.time() - start_time) * 1000)
 
@@ -153,7 +156,10 @@ async def go_back(
         screenshot_after = None
 
         if capture_before:
-            screenshot_before = await page.screenshot()
+            try:
+                screenshot_before = await page.screenshot()
+            except Exception:
+                pass
 
         response = await page.go_back(
             wait_until=wait_until,
@@ -161,7 +167,10 @@ async def go_back(
         )
 
         if capture_after:
-            screenshot_after = await page.screenshot()
+            try:
+                screenshot_after = await page.screenshot()
+            except Exception:
+                pass
 
         duration_ms = int((time.time() - start_time) * 1000)
 
@@ -231,7 +240,10 @@ async def go_forward(
         screenshot_after = None
 
         if capture_before:
-            screenshot_before = await page.screenshot()
+            try:
+                screenshot_before = await page.screenshot()
+            except Exception:
+                pass
 
         response = await page.go_forward(
             wait_until=wait_until,
@@ -239,7 +251,10 @@ async def go_forward(
         )
 
         if capture_after:
-            screenshot_after = await page.screenshot()
+            try:
+                screenshot_after = await page.screenshot()
+            except Exception:
+                pass
 
         duration_ms = int((time.time() - start_time) * 1000)
 
@@ -309,7 +324,10 @@ async def reload(
         screenshot_after = None
 
         if capture_before:
-            screenshot_before = await page.screenshot()
+            try:
+                screenshot_before = await page.screenshot()
+            except Exception:
+                pass
 
         response = await page.reload(
             wait_until=wait_until,
@@ -317,7 +335,10 @@ async def reload(
         )
 
         if capture_after:
-            screenshot_after = await page.screenshot()
+            try:
+                screenshot_after = await page.screenshot()
+            except Exception:
+                pass
 
         duration_ms = int((time.time() - start_time) * 1000)
 

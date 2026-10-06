@@ -10,4 +10,15 @@ export const databaseConfig: TypeOrmModuleOptions = {
   entities: [__dirname + '/../**/*.entity{.ts,.js}'],
   synchronize: process.env.NODE_ENV !== 'production',
   logging: process.env.NODE_ENV !== 'production',
+  extra: {
+    // Set query timeout to prevent long-running queries from hanging the server
+    // Value is in milliseconds. 0 means no timeout.
+    statement_timeout: parseInt(
+      process.env.DATABASE_QUERY_TIMEOUT || '30000',
+      10,
+    ),
+    // Additional connection pool settings for stability
+    max: 20, // Maximum number of clients in the pool
+    connectionTimeoutMillis: 10000, // 10 seconds to acquire connection
+  },
 };

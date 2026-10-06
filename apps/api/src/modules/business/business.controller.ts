@@ -15,7 +15,7 @@ import {
   CreateBusinessItemDto,
   CreateRelationshipDto,
 } from './business.service';
-import { BusinessItemType } from './entities/business-item.entity';
+import { BusinessItemType, VerificationStatus } from './entities/business-item.entity';
 
 @Controller('business')
 export class BusinessController {
@@ -47,7 +47,9 @@ export class BusinessController {
         description: item.description,
         content: item.content,
         confidence: item.confidence,
+        verificationStatus: item.verificationStatus,
         tags: item.tags,
+        metadata: item.metadata,
         sourceId: item.sourceId,
         documentId: item.documentId,
         externalId: item.externalId,
@@ -82,10 +84,13 @@ export class BusinessController {
       description: item.description,
       content: item.content,
       confidence: item.confidence,
+      verificationStatus: item.verificationStatus,
       tags: item.tags,
       metadata: item.metadata,
       sourceId: item.sourceId,
       documentId: item.documentId,
+      source: item.source ? { id: item.source.id, name: item.source.name, type: item.source.type } : null,
+      document: item.document ? { id: item.document.id, title: item.document.title, url: item.document.url, type: item.document.type } : null,
       externalId: item.externalId,
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
@@ -124,6 +129,20 @@ export class BusinessController {
       id: item.id,
       type: item.type,
       name: item.name,
+      updatedAt: item.updatedAt,
+    };
+  }
+
+  @Patch('items/:id/verification')
+  async updateVerificationStatus(
+    @Param('id') id: string,
+    @Body('status') status: VerificationStatus,
+  ) {
+    const item = await this.businessService.updateVerificationStatus(id, status);
+    return {
+      id: item.id,
+      verificationStatus: item.verificationStatus,
+      confidence: item.confidence,
       updatedAt: item.updatedAt,
     };
   }

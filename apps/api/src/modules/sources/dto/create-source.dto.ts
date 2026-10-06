@@ -14,7 +14,7 @@ class OAuthConfigDto {
 }
 
 class SourceConfigDto {
-  @IsEnum(['token', 'oauth'])
+  @IsEnum(['token', 'oauth', 'none'])
   authType: AuthType;
 
   @IsOptional()
@@ -63,6 +63,7 @@ export class CreateSourceDto {
     'swagger',
     'database',
     'api',
+    'upload',
   ])
   type: SourceType;
 

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Environment, EnvironmentVariable } from './environment.entity';
@@ -8,6 +8,9 @@ export interface CreateEnvironmentDto {
   description?: string;
   color?: string;
   variables?: EnvironmentVariable[];
+  baseUrl?: string | null;
+  maxRetries?: number | null;
+  retryDelayMs?: number | null;
 }
 
 export interface UpdateEnvironmentDto {
@@ -15,6 +18,9 @@ export interface UpdateEnvironmentDto {
   description?: string;
   color?: string;
   variables?: EnvironmentVariable[];
+  baseUrl?: string | null;
+  maxRetries?: number | null;
+  retryDelayMs?: number | null;
 }
 
 @Injectable()
@@ -42,16 +48,29 @@ export class EnvironmentsService {
     return this.environmentRepository.findOne({ where: { isDefault: true } });
   }
 
+  private validateRetryPolicy(maxRetries?: number | null, retryDelayMs?: number | null): void {
+    if (maxRetries != null && (!Number.isInteger(maxRetries) || maxRetries < 0 || maxRetries > 10)) {
+      throw new BadRequestException('maxRetries must be a whole number between 0 and 10, or null to use the default');
+    }
+    if (retryDelayMs != null && (!Number.isInteger(retryDelayMs) || retryDelayMs < 0 || retryDelayMs > 60000)) {
+      throw new BadRequestException('retryDelayMs must be a whole number between 0 and 60000, or null to use the default');
+    }
+  }
+
   async create(dto: CreateEnvironmentDto): Promise<Environment> {
+    this.validateRetryPolicy(dto.maxRetries, dto.retryDelayMs);
     // If this is the first environment, make it default
     const count = await this.environmentRepository.count();
-    
+
     const environment = this.environmentRepository.create({
       name: dto.name,
       description: dto.description || null,
       color: dto.color || '#3B82F6',
       variables: dto.variables || [],
+      baseUrl: dto.baseUrl || null,
       isDefault: count === 0,
+      maxRetries: dto.maxRetries ?? null,
+      retryDelayMs: dto.retryDelayMs ?? null,
     });
 
     return this.environmentRepository.save(environment);
@@ -59,6 +78,7 @@ export class EnvironmentsService {
 
   async update(id: string, dto: UpdateEnvironmentDto): Promise<Environment> {
     const environment = await this.findOne(id);
+    this.validateRetryPolicy(dto.maxRetries, dto.retryDelayMs);
 
     if (dto.name !== undefined) {
       environment.name = dto.name;
@@ -71,6 +91,15 @@ export class EnvironmentsService {
     }
     if (dto.variables !== undefined) {
       environment.variables = dto.variables;
+    }
+    if (dto.baseUrl !== undefined) {
+      environment.baseUrl = dto.baseUrl;
+    }
+    if (dto.maxRetries !== undefined) {
+      environment.maxRetries = dto.maxRetries;
+    }
+    if (dto.retryDelayMs !== undefined) {
+      environment.retryDelayMs = dto.retryDelayMs;
     }
 
     return this.environmentRepository.save(environment);

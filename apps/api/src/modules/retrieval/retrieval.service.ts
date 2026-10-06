@@ -1,18 +1,26 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { EmbeddingService } from '../processing/embedding.service';
 import { DocumentsService } from '../documents/documents.service';
 import { Chunk } from '../documents/entities/chunk.entity';
+import { validateScope, validVector, cosineSimilarity } from './evidence-contract';
+
+export interface EvidenceCitation {
+  id: string;
+  sourceId: string;
+  documentId: string;
+  chunkId: string;
+  revisionHash: string;
+  quote: string;
+  quoteHash: string;
+}
 
 export interface RetrievalResult {
-  chunks: {
-    id: string;
-    content: string;
-    documentId: string;
-    documentTitle: string;
-    documentType: string;
-    documentUrl: string | null;
-    similarity: number;
-  }[];
+  omittedChunks?: number;
+  chunks: Array<{
+    id: string; content: string; documentId: string; documentTitle: string;
+    documentType: string; documentUrl: string | null; similarity: number; citation: EvidenceCitation;
+  }>;
   context: string;
 }
 
@@ -25,92 +33,72 @@ export interface SearchOptions {
 
 @Injectable()
 export class RetrievalService {
-  private readonly logger = new Logger(RetrievalService.name);
+  constructor(private embeddingService: EmbeddingService, private documentsService: DocumentsService) {}
 
-  constructor(
-    private embeddingService: EmbeddingService,
-    private documentsService: DocumentsService,
-  ) {}
-
-  /**
-   * Search for relevant chunks based on a query
-   */
-  async search(query: string, options: SearchOptions = {}): Promise<RetrievalResult> {
-    const { limit = 10, minSimilarity = 0.5 } = options;
-
-    this.logger.log(`Searching for: "${query.slice(0, 50)}..."`);
-
-    // Generate embedding for the query
-    const queryEmbedding = await this.embeddingService.embedOne(query);
-
-    // Search for similar chunks
-    const chunks = await this.documentsService.searchByEmbedding(queryEmbedding, limit * 2);
-
-    // Calculate similarity and filter
-    const results = chunks
-      .map((chunk) => ({
-        chunk,
-        similarity: chunk.embedding ? this.cosineSimilarity(queryEmbedding, chunk.embedding) : 0,
-      }))
-      .filter((r) => r.similarity >= minSimilarity)
-      .sort((a, b) => b.similarity - a.similarity)
-      .slice(0, limit);
-
-    // Build context string
-    const context = results
-      .map((r) => `[From: ${r.chunk.document?.title || 'Unknown'}]\n${r.chunk.content}`)
-      .join('\n\n---\n\n');
-
+  private citation(chunk: Chunk): EvidenceCitation {
+    const revisionHash = String(chunk.metadata!.revisionHash);
     return {
-      chunks: results.map((r) => ({
-        id: r.chunk.id,
-        content: r.chunk.content,
-        documentId: r.chunk.documentId,
-        documentTitle: r.chunk.document?.title || 'Unknown',
-        documentType: r.chunk.document?.type || 'unknown',
-        documentUrl: r.chunk.document?.url || null,
-        similarity: Math.round(r.similarity * 100) / 100,
-      })),
-      context,
+      id: `source:${chunk.document.sourceId}/document:${chunk.documentId}/revision:${revisionHash}/chunk:${chunk.id}`,
+      sourceId: chunk.document.sourceId, documentId: chunk.documentId, chunkId: chunk.id, revisionHash,
+      quote: chunk.content, quoteHash: createHash('sha256').update(chunk.content).digest('hex'),
     };
   }
 
-  /**
-   * Get context for RAG based on a query
-   */
-  async getContext(query: string, maxTokens = 2000): Promise<string> {
-    const results = await this.search(query, { limit: 10 });
-
-    // Estimate tokens (rough: 4 chars per token)
-    let context = '';
-    let estimatedTokens = 0;
-    const charsPerToken = 4;
-
-    for (const chunk of results.chunks) {
-      const chunkTokens = Math.ceil(chunk.content.length / charsPerToken);
-      if (estimatedTokens + chunkTokens > maxTokens) break;
-
-      context += `\n\n[Source: ${chunk.documentTitle}]\n${chunk.content}`;
-      estimatedTokens += chunkTokens;
-    }
-
-    return context.trim();
+  private format(chunk: RetrievalResult['chunks'][number]): string {
+    return `[Evidence ${chunk.citation.id}]\n${chunk.content}`;
   }
 
-  private cosineSimilarity(a: number[], b: number[]): number {
-    if (a.length !== b.length) return 0;
-
-    let dotProduct = 0;
-    let normA = 0;
-    let normB = 0;
-
-    for (let i = 0; i < a.length; i++) {
-      dotProduct += a[i] * b[i];
-      normA += a[i] * a[i];
-      normB += b[i] * b[i];
+  async search(query: string, options: SearchOptions = {}): Promise<RetrievalResult> {
+    validateScope(options);
+    const { limit = 10, minSimilarity = 0.5 } = options;
+    if (typeof query !== 'string' || !query.trim() || query.length > 4000 ||
+        !Number.isInteger(limit) || limit < 1 || limit > 50 ||
+        !Number.isFinite(minSimilarity) || minSimilarity < -1 || minSimilarity > 1) {
+      throw new BadRequestException('Invalid retrieval query, limit or similarity');
     }
+    const embedding = await this.embeddingService.embedOne(query);
+    if (!validVector(embedding)) throw new Error('Invalid query embedding');
+    const chunks = await this.documentsService.searchByEmbedding(embedding, limit, {
+      sourceIds: options.sourceIds, documentTypes: options.documentTypes,
+    });
+    const results = chunks.filter(chunk => chunk.document && options.sourceIds.includes(chunk.document.sourceId) &&
+      (!options.documentTypes || options.documentTypes.includes(chunk.document.type)) &&
+      typeof chunk.metadata?.revisionHash === 'string' && chunk.metadata.revisionHash.length > 0 &&
+      chunk.metadata.revisionHash === chunk.document.processedHash)
+      .map(chunk => ({ chunk, similarity: chunk.embedding ? cosineSimilarity(embedding, chunk.embedding) : -Infinity }))
+      .filter(result => Number.isFinite(result.similarity) && result.similarity >= minSimilarity)
+      .sort((left, right) => right.similarity - left.similarity || left.chunk.id.localeCompare(right.chunk.id))
+      .slice(0, limit)
+      .map(({ chunk, similarity }) => ({
+        id: chunk.id, content: chunk.content, documentId: chunk.documentId,
+        documentTitle: chunk.document.title, documentType: chunk.document.type, documentUrl: chunk.document.url,
+        similarity, citation: this.citation(chunk),
+      }));
+    return { chunks: results, context: results.map(chunk => this.format(chunk)).join('\n\n---\n\n') };
+  }
 
-    const magnitude = Math.sqrt(normA) * Math.sqrt(normB);
-    return magnitude === 0 ? 0 : dotProduct / magnitude;
+  async getEvidence(query: string, maxTokens = 2000, options: SearchOptions = {}): Promise<RetrievalResult> {
+    if (!Number.isInteger(maxTokens) || maxTokens < 1 || maxTokens > 16000) throw new BadRequestException('Invalid context budget');
+    const results = await this.search(query, options);
+    const selected: RetrievalResult['chunks'] = [];
+    let context = '';
+    for (const chunk of results.chunks) {
+      const candidate = (context ? '\n\n---\n\n' : '') + this.format(chunk);
+      if (context.length + candidate.length > maxTokens * 4) continue;
+      selected.push(chunk);
+      context += candidate;
+    }
+    return { chunks: selected, context, omittedChunks: results.chunks.length - selected.length };
+  }
+
+  async getContext(query: string, maxTokens = 2000, options: SearchOptions = {}): Promise<string> {
+    return (await this.getEvidence(query, maxTokens, options)).context;
+  }
+
+  async resolveCitation(documentId: string, chunkId: string, revisionHash: string, options: SearchOptions): Promise<EvidenceCitation> {
+    validateScope(options);
+    if (![documentId, chunkId].every(value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(value)) ||
+        typeof revisionHash !== 'string' || !/^[0-9a-f]{64}$/.test(revisionHash)) throw new BadRequestException('Invalid citation reference');
+    return this.citation(await this.documentsService.resolveCitation(documentId, chunkId, revisionHash, options));
   }
 }

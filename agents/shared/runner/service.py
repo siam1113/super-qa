@@ -11,8 +11,10 @@ import asyncio
 import json
 import uuid
 import logging
+import httpx
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import quote
 from typing import Optional, List, Dict, Any, Callable
 from concurrent.futures import ThreadPoolExecutor
 
@@ -42,6 +44,8 @@ class TestRunnerService:
         results_dir: str = None,
         max_workers: int = 4,
     ):
+        # Legacy runner - only used when MCP harness unavailable
+        # Tests are normally executed via MCP harness, not from static files
         self.tests_dir = Path(tests_dir or os.getenv("TESTS_DIR", "./tests"))
         self.results_dir = Path(results_dir or os.getenv("RESULTS_DIR", "./test-results"))
         self.max_workers = max_workers
@@ -55,9 +59,11 @@ class TestRunnerService:
         # Callbacks for status updates
         self._on_progress: Optional[Callable[[TestRun], None]] = None
 
-        # Ensure directories exist
-        self.tests_dir.mkdir(parents=True, exist_ok=True)
-        self.results_dir.mkdir(parents=True, exist_ok=True)
+        # Only create directories if explicitly configured via env vars
+        # (MCP harness doesn't need these directories)
+        if os.getenv("TESTS_DIR") or os.getenv("RESULTS_DIR"):
+            self.tests_dir.mkdir(parents=True, exist_ok=True)
+            self.results_dir.mkdir(parents=True, exist_ok=True)
 
     async def start(self):
         """Start the test runner service."""
@@ -239,8 +245,16 @@ class TestRunnerService:
             # Execute real Playwright test
             result = await self._run_playwright_test(test_id, test_file, environment, browser)
         else:
-            # Simulate test execution for demo
-            result = await self._simulate_test_execution(test_id, environment)
+            result = TestResult(
+                test_id=test_id,
+                test_name=test_id,
+                status=RunStatus.ERROR,
+                duration_ms=0,
+                started_at=started_at,
+                error_message="No executable test definition or test file was found",
+                metadata={"simulated": False, "reason": "missing_test_definition"},
+                execution_mode="unavailable",
+            )
 
         result.started_at = started_at
         result.completed_at = datetime.now()
@@ -256,11 +270,22 @@ class TestRunnerService:
     ) -> Optional[TestResult]:
         """Execute a test via MCP harness."""
         try:
+            backend_url = os.getenv("BACKEND_API_URL", "http://localhost:4000/api").rstrip("/")
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(f"{backend_url}/qa/test-cases/{quote(test_id, safe='')}")
+                if response.status_code == 404:
+                    return None
+                response.raise_for_status()
+                test_spec = response.json()
+            if test_spec is None:
+                return None
+            if not isinstance(test_spec, dict) or not isinstance(test_spec.get("steps"), list):
+                raise ValueError("Backend returned an invalid executable test definition")
             orchestrator = get_orchestrator()
 
             # Execute test via orchestrator
             exec_result = await orchestrator.execute_test(
-                test_id=test_id,
+                test_spec=test_spec,
                 environment=environment,
                 browser=browser,
                 trace_level="action",
@@ -292,7 +317,7 @@ class TestRunnerService:
                     selector=step_state.actions[0].selector if step_state.actions else None,
                     screenshot_before=step_state.actions[0].screenshot_before if step_state.actions else None,
                     screenshot_after=step_state.actions[0].screenshot_after if step_state.actions else None,
-                    trace_id=step_state.trace_id,
+                    trace_id=step_state.step_id,
                 )
                 steps.append(step)
 
@@ -305,18 +330,26 @@ class TestRunnerService:
                 completed_at=exec_result.completed_at,
                 steps=steps,
                 error_message=exec_result.error_message,
-                screenshots=exec_result.screenshots,
-                logs=exec_result.logs,
+                screenshots=exec_result.all_screenshots,
+                logs=[str(entry.get("text", entry)) for entry in exec_result.all_console_logs],
                 trace_key=exec_result.trace_key,
-                browser_session_id=exec_result.browser_session_id,
+                browser_session_id=exec_result.session_id,
                 execution_mode="mcp",
-                console_log_count=exec_result.console_log_count,
-                network_request_count=exec_result.network_request_count,
+                console_log_count=len(exec_result.all_console_logs),
+                network_request_count=len(exec_result.all_network_requests),
             )
 
         except Exception as e:
-            logger.warning(f"MCP execution failed for {test_id}, falling back to legacy: {e}")
-            return None
+            logger.error(f"MCP execution failed for {test_id}: {e}")
+            return TestResult(
+                test_id=test_id,
+                test_name=test_id,
+                status=RunStatus.ERROR,
+                duration_ms=0,
+                started_at=datetime.now(),
+                error_message=str(e),
+                execution_mode="mcp",
+            )
 
     def _find_test_file(self, test_id: str) -> Optional[Path]:
         """Find the test file for a given test ID."""

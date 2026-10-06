@@ -6,15 +6,23 @@ Orchestrates test execution using:
 - Business context (locators, rules, requirements)
 - Video recording and tracing
 """
+import asyncio
 import os
 import logging
 import httpx
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Optional, Dict, Any, List, Literal, Callable
 
-from .state import ExecutionState, ExecutionStatus
+from .state import ExecutionState, ExecutionStatus, StepStatus
 from .interpreter import TestInterpreter
 from .executor import TestExecutor, MCPClient, RetryPolicy
+from langgraph.config import get_stream_writer
+
+from shared.live import get_live_registry
+from shared.live.screencast import ScreencastStreamer
+from shared.mcp.playwright.context import get_browser_manager
+from shared.narration import emit_status
 
 logger = logging.getLogger(__name__)
 
@@ -48,10 +56,19 @@ class OrchestratorConfig:
     slow_mo: int = 0
     storage_backend_url: str = "http://localhost:4000/api"
     use_context: bool = True  # Fetch context from backend
+    # Wall-clock cap on an entire test run, on top of the per-step timeout inside
+    # TestExecutor — bounds a run where every step individually stays within its
+    # own budget but the test as a whole still runs away (e.g. a long suite with
+    # no single slow step).
+    test_timeout_seconds: float = 1800.0
+    step_timeout_seconds: float = 300.0
+    step_retry_count: int = 0
+    max_tokens_per_test: Optional[int] = None
 
     @classmethod
     def from_env(cls) -> "OrchestratorConfig":
         """Create config from environment variables."""
+        max_tokens_env = os.getenv("QAE_MAX_TOKENS_PER_TEST", "")
         return cls(
             default_timeout=int(os.getenv("PLAYWRIGHT_DEFAULT_TIMEOUT", "30000")),
             capture_screenshots=os.getenv("TRACE_SCREENSHOTS", "true").lower() == "true",
@@ -65,6 +82,10 @@ class OrchestratorConfig:
             slow_mo=int(os.getenv("PLAYWRIGHT_SLOW_MO", "0")),
             storage_backend_url=os.getenv("BACKEND_API_URL", "http://localhost:4000/api"),
             use_context=os.getenv("USE_BACKEND_CONTEXT", "true").lower() == "true",
+            test_timeout_seconds=float(os.getenv("TEST_EXECUTION_TIMEOUT_SECONDS", "1800")),
+            step_timeout_seconds=float(os.getenv("GROUNDED_STEP_TIMEOUT_SECONDS", "300")),
+            step_retry_count=int(os.getenv("STEP_RETRY_COUNT", "0")),
+            max_tokens_per_test=int(max_tokens_env) if max_tokens_env.strip() else None,
         )
 
 
@@ -164,6 +185,7 @@ class TestOrchestrator:
             focus,
             press,
             type_text,
+            accessibility_snapshot,
             screenshot,
             get_console_logs,
             get_network_requests,
@@ -179,6 +201,7 @@ class TestOrchestrator:
             expect_checked,
             expect_enabled,
             expect_attribute,
+            expect_download,
             wait_for_selector,
             wait_for_navigation,
             wait_for_load_state,
@@ -208,6 +231,7 @@ class TestOrchestrator:
             "focus": focus,
             "press": press,
             "type_text": type_text,
+            "accessibility_snapshot": accessibility_snapshot,
             "screenshot": screenshot,
             "get_console_logs": get_console_logs,
             "get_network_requests": get_network_requests,
@@ -223,6 +247,7 @@ class TestOrchestrator:
             "expect_checked": expect_checked,
             "expect_enabled": expect_enabled,
             "expect_attribute": expect_attribute,
+            "expect_download": expect_download,
             "wait_for_selector": wait_for_selector,
             "wait_for_navigation": wait_for_navigation,
             "wait_for_load_state": wait_for_load_state,
@@ -240,6 +265,7 @@ class TestOrchestrator:
         browser: Literal["chromium", "firefox", "webkit"] = "chromium",
         trace_level: Optional[Literal["action", "step", "test"]] = None,
         on_step_complete: Optional[Callable] = None,
+        run_id: Optional[str] = None,
     ) -> ExecutionState:
         """
         Execute a single test specification.
@@ -250,6 +276,9 @@ class TestOrchestrator:
             browser: Browser to use
             trace_level: Level of tracing detail (overrides config)
             on_step_complete: Callback when a step completes
+
+        The target environment's maxRetries/retryDelayMs (set in the Environments UI),
+        if present, override this orchestrator's config-wide retry defaults.
 
         Returns:
             ExecutionState with full execution trace
@@ -283,6 +312,7 @@ class TestOrchestrator:
             environment=environment,
             browser=browser,
             trace_level=trace_level or self.config.trace_level,
+            run_id=run_id,
         )
 
         # Store context in state metadata
@@ -303,41 +333,112 @@ class TestOrchestrator:
 
         logger.info(f"Starting test execution: {parsed.test_name} ({parsed.test_id})")
 
+        live = get_live_registry()
+        live.create(state.run_id, state.test_id, state.test_name)
+        live.publish(state.run_id, {"type": "step", "steps": [s.to_dict() for s in state.steps]})
+        try:
+            # No-ops when execute_test wasn't invoked from inside a LangGraph run (e.g.
+            # the "Run with agent" button). Lets a chat tool call surface a watchable
+            # run ID the moment the browser starts, long before the tool call returns.
+            get_stream_writer()({"type": "live_run_started", "runId": state.run_id, "testId": state.test_id, "testName": state.test_name})
+        except Exception:
+            pass
+        emit_status(f"Running app — {parsed.test_name}…")
+        streamer: Optional[ScreencastStreamer] = None
+
         try:
             # Setup browser with video recording
             await self._setup_browser(state, browser, business_context)
+            streamer = await self._start_live_stream(state, live)
 
-            # Navigate to base URL if provided
-            if parsed.base_url:
-                # Apply environment-specific base URL if available
-                base_url = self._resolve_base_url(parsed.base_url, environment, business_context)
+            # Navigate to a start URL before any step runs. The test case's own baseUrl
+            # (if set) takes precedence; otherwise fall back to the environment's
+            # configured baseUrl. Without one of these, the browser stays on a blank
+            # page and every step fails since there's nothing to ground against.
+            base_url = parsed.base_url or env_config.get("baseUrl")
+            if base_url:
+                base_url = self._resolve_base_url(base_url, environment, business_context)
                 await self._navigate_to_base_url(state, base_url, environment)
+            else:
+                logger.warning(
+                    f"No baseUrl set on test case '{parsed.test_name}' or environment "
+                    f"'{environment}' — browser will start on a blank page."
+                )
 
             # Create MCP client for this execution
-            mcp_client = self._create_mcp_client(state.page_id)
+            mcp_client = self._create_mcp_client(state.page_id, state.context_id)
 
             # Enhance interpreter with locators from context
             if business_context.locators:
                 self.interpreter.set_locators(business_context.locators)
 
-            # Create executor with retry policy
+            # Create executor with retry policy, preferring this environment's override
+            # (set in the Environments UI) over the runtime-wide default.
+            env_max_retries = env_config.get("maxRetries")
+            env_retry_delay_ms = env_config.get("retryDelayMs")
             retry_policy = RetryPolicy(
-                max_retries=self.config.max_retries,
-                retry_delay_ms=self.config.retry_delay_ms,
+                max_retries=env_max_retries if isinstance(env_max_retries, int) else self.config.max_retries,
+                retry_delay_ms=env_retry_delay_ms if isinstance(env_retry_delay_ms, int) else self.config.retry_delay_ms,
             )
+
+            def publish_steps(_step_state) -> None:
+                live.publish(state.run_id, {"type": "step", "steps": [s.to_dict() for s in state.steps]})
+
+            def handle_step_complete(step_state) -> None:
+                publish_steps(step_state)
+                emit_status(f"Step {state.current_step}/{len(state.steps)}: {step_state.description} — {step_state.status.value}")
+                if on_step_complete:
+                    on_step_complete(step_state)
 
             executor = TestExecutor(
                 mcp_client=mcp_client,
                 retry_policy=retry_policy,
-                on_step_complete=on_step_complete,
+                on_step_start=publish_steps,
+                on_step_complete=handle_step_complete,
+                on_action_complete=publish_steps,
+                locator_hints=business_context.locators,
+                step_timeout_seconds=self.config.step_timeout_seconds,
+                step_retry_count=self.config.step_retry_count,
+                max_tokens_per_test=self.config.max_tokens_per_test,
             )
 
-            # Execute all steps
-            state = await executor.execute_all_steps(
-                state=state,
-                parsed_steps=parsed.steps,
-                stop_on_failure=self.config.stop_on_failure,
+            # Execute all steps, bounded by an overall test wall-clock budget on top
+            # of each step's own budget — a run where every individual step stays
+            # within its limit can still run away in aggregate (e.g. a long suite).
+            state = await asyncio.wait_for(
+                executor.execute_all_steps(
+                    state=state,
+                    parsed_steps=parsed.steps,
+                    stop_on_failure=self.config.stop_on_failure,
+                ),
+                timeout=self.config.test_timeout_seconds,
             )
+
+        except asyncio.TimeoutError:
+            logger.error(f"Test execution exceeded its {self.config.test_timeout_seconds}s wall-clock budget: {state.run_id}")
+            current_index = state.current_step - 1
+            if 0 <= current_index < len(state.steps) and state.steps[current_index].status == StepStatus.RUNNING:
+                state.complete_step(current_index, StepStatus.ERROR, error="Test exceeded its wall-clock budget")
+            for step in state.steps:
+                if step.status == StepStatus.PENDING:
+                    step.status = StepStatus.SKIPPED
+            state.complete(
+                ExecutionStatus.ERROR,
+                f"Test exceeded its {self.config.test_timeout_seconds:.0f}s wall-clock budget",
+            )
+
+        except asyncio.CancelledError:
+            logger.info(f"Execution cancelled: {state.run_id}")
+            current_index = state.current_step - 1
+            if 0 <= current_index < len(state.steps) and state.steps[current_index].status == StepStatus.RUNNING:
+                state.complete_step(current_index, StepStatus.ERROR, error="Cancelled by user")
+            for step in state.steps:
+                if step.status == StepStatus.PENDING:
+                    step.status = StepStatus.SKIPPED
+            state.complete(ExecutionStatus.CANCELLED, "Cancelled by user")
+            # Swallowed deliberately: cleanup below (browser close, result report) must
+            # still run, and the run's own "cancelled" status is already recorded —
+            # there's no caller that needs this task to also look cancelled().
 
         except Exception as e:
             logger.error(f"Test execution failed: {e}")
@@ -345,12 +446,92 @@ class TestOrchestrator:
             state.stack_trace = self._get_stack_trace(e)
 
         finally:
+            if streamer is not None:
+                await streamer.stop()
             # Cleanup browser and save video
             await self._cleanup_browser(state)
+            live.complete(state.run_id, state.status.value)
+            await self._report_agent_result(state)
 
         logger.info(f"Test completed: {state.status.value} in {state.duration_ms}ms")
 
         return state
+
+    async def _report_agent_result(self, state: ExecutionState) -> None:
+        """Best-effort notify the backend of a finished agent-driven run (no-op if unknown)."""
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                await client.post(f"{BACKEND_URL}/qa/executions/agent-result", json={
+                    "agentRunId": state.run_id,
+                    "status": state.status.value,
+                    "result": {
+                        "steps": [s.to_dict() for s in state.steps],
+                        "durationMs": state.duration_ms,
+                        "consoleLogCount": len(state.all_console_logs),
+                        "networkRequestCount": len(state.all_network_requests),
+                        "consoleLogs": state.all_console_logs[-200:],
+                        "networkRequests": state.all_network_requests[-200:],
+                        "dialogs": state.all_dialogs,
+                        "downloads": state.all_downloads,
+                        "totalTokensUsed": state.total_tokens_used,
+                        "errorMessage": state.error_message,
+                        "videoKey": state.video_key,
+                    },
+                })
+        except Exception as e:
+            logger.warning(f"Failed to report agent execution result for {state.run_id}: {e}")
+
+    async def _start_live_stream(self, state: ExecutionState, live) -> Optional[ScreencastStreamer]:
+        """Attach a CDP screencast plus console/network tailing to the run's page."""
+        page = get_browser_manager().get_page(state.page_id)
+        if page is None:
+            return None
+
+        streamer = ScreencastStreamer(
+            page,
+            lambda data_url: live.publish(state.run_id, {"type": "frame", "dataUrl": data_url}),
+        )
+        try:
+            await streamer.start()
+        except Exception as e:
+            logger.warning(f"Live screencast unavailable for {state.run_id}: {e}")
+            streamer = None
+
+        pending_requests: Dict[str, Dict[str, Any]] = {}
+
+        def handle_console(message) -> None:
+            live.publish(state.run_id, {"type": "console", "log": {
+                "level": message.type,
+                "message": message.text,
+                "timestamp": datetime.now().isoformat(),
+            }})
+
+        def handle_request(request) -> None:
+            entry = {
+                "url": request.url,
+                "method": request.method,
+                "resourceType": request.resource_type,
+                "status": None,
+                "timestamp": datetime.now().isoformat(),
+            }
+            pending_requests[request.url] = entry
+            live.publish(state.run_id, {"type": "network", "request": entry})
+
+        def handle_response(response) -> None:
+            entry = dict(pending_requests.pop(response.url, {
+                "url": response.url,
+                "method": response.request.method,
+                "resourceType": response.request.resource_type,
+                "timestamp": datetime.now().isoformat(),
+            }))
+            entry["status"] = response.status
+            live.publish(state.run_id, {"type": "network", "request": entry})
+
+        page.on("console", handle_console)
+        page.on("request", handle_request)
+        page.on("response", handle_response)
+
+        return streamer
 
     def _resolve_base_url(
         self,
@@ -480,6 +661,46 @@ class TestOrchestrator:
     async def _cleanup_browser(self, state: ExecutionState) -> None:
         """Clean up browser resources and save video."""
         try:
+            manager = get_browser_manager()
+
+            # Capture history from every page in this run — the original tab plus
+            # any popups/new tabs auto-tracked mid-test (see TestExecutor's
+            # new-tab-follow logic) — before any of them close, so the completed-
+            # execution detail view has more than the last-5-per-action window each
+            # action result carries.
+            page_ids = manager.get_page_ids_for_context(state.context_id) if state.context_id else []
+            if not page_ids and state.page_id:
+                page_ids = [state.page_id]
+
+            for page_id in page_ids:
+                state.all_console_logs.extend(
+                    {"level": log.level, "message": log.message, "timestamp": log.timestamp.isoformat()}
+                    for log in manager.get_console_logs(page_id)
+                )
+                state.all_network_requests.extend(
+                    {"url": req.url, "method": req.method, "resourceType": req.resource_type,
+                     "status": req.status, "timestamp": req.timestamp.isoformat(),
+                     "requestHeaders": req.request_headers, "responseHeaders": req.response_headers,
+                     "requestBody": req.request_body, "responseBody": req.response_body,
+                     "failureText": req.failure_text}
+                    for req in manager.get_network_requests(page_id)
+                )
+                state.all_dialogs.extend(
+                    {"type": d.dialog_type, "message": d.message, "accepted": d.accepted,
+                     "timestamp": d.timestamp.isoformat()}
+                    for d in manager.get_dialogs(page_id)
+                )
+                state.all_downloads.extend(
+                    {"url": d.url, "suggestedFilename": d.suggested_filename, "timestamp": d.timestamp.isoformat()}
+                    for d in manager.get_downloads(page_id)
+                )
+
+            # Close any extra tabs/popups opened mid-test first, so they don't leak
+            # past this run — only the primary page's video/close result is tracked
+            # on the execution state.
+            if state.context_id and state.page_id:
+                await manager.close_extra_pages(state.context_id, keep_page_id=state.page_id)
+
             # Close page first to finalize video
             if state.page_id:
                 page_close = self._mcp_tools["page_close"]
@@ -513,9 +734,9 @@ class TestOrchestrator:
         except Exception as e:
             logger.warning(f"Failed to cleanup browser: {e}")
 
-    def _create_mcp_client(self, page_id: str) -> MCPClient:
+    def _create_mcp_client(self, page_id: str, context_id: Optional[str] = None) -> MCPClient:
         """Create an MCP client configured for this execution."""
-        client = MCPClient(page_id)
+        client = MCPClient(page_id, context_id=context_id)
 
         # Register all MCP tools with the client
         for name, func in self._mcp_tools.items():

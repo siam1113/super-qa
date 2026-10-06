@@ -1,0 +1,18 @@
+{$DOMAIN} {
+	encode gzip
+
+	@agents path /agents/*
+	handle @agents {
+		uri strip_prefix /agents
+		reverse_proxy agents:8000
+	}
+
+	@api path /api/*
+	handle @api {
+		reverse_proxy api:4000
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}

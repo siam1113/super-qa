@@ -74,6 +74,8 @@ async def context_create(
     storage_state: Optional[str] = None,
     locale: str = "en-US",
     timezone: str = "America/New_York",
+    record_video: Optional[bool] = None,
+    video_dir: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Create a new browser context within a session.
@@ -86,6 +88,8 @@ async def context_create(
         storage_state: Path to saved storage state (cookies, localStorage) for auth
         locale: Browser locale (e.g., "en-US", "fr-FR")
         timezone: Browser timezone (e.g., "America/New_York")
+        record_video: Whether to record video (defaults to config setting)
+        video_dir: Directory to save videos (defaults to config setting)
 
     Returns:
         Dictionary with context information including context_id
@@ -98,6 +102,8 @@ async def context_create(
             storage_state=storage_state,
             locale=locale,
             timezone=timezone,
+            record_video=record_video,
+            video_dir=video_dir,
         )
 
         logger.info(f"Context created: {context.context_id}")
@@ -175,15 +181,16 @@ async def page_close(page_id: str) -> Dict[str, Any]:
         page_id: The ID of the page to close
 
     Returns:
-        Dictionary indicating success/failure
+        Dictionary indicating success/failure, with videoPath if a recording was captured
     """
     manager = get_browser_manager()
-    success = await manager.close_page(page_id)
+    result = await manager.close_page(page_id)
 
     return {
-        "success": success,
+        "success": result.get("success", False),
         "pageId": page_id,
-        "message": "Page closed successfully" if success else "Failed to close page",
+        "message": "Page closed successfully" if result.get("success") else "Failed to close page",
+        **({"videoPath": result["videoPath"]} if "videoPath" in result else {}),
     }
 
 

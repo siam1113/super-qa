@@ -19,11 +19,12 @@ export type SourceType =
   | 'postman'
   | 'swagger'
   | 'database'
-  | 'api';
+  | 'api'
+  | 'upload';
 
 export type SourceStatus = 'connected' | 'disconnected' | 'syncing' | 'error';
 export type SyncMode = 'auto' | 'manual';
-export type AuthType = 'token' | 'oauth';
+export type AuthType = 'token' | 'oauth' | 'none';
 
 export interface SourceConfig {
   authType: AuthType;

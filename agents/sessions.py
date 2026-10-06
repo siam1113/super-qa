@@ -3,7 +3,7 @@ import json
 import uuid
 import logging
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Literal, Optional
 
 import redis.asyncio as redis
 
@@ -17,7 +17,7 @@ class SessionManager:
 
     def __init__(self, redis_url: str = "redis://localhost:6379"):
         self.redis_url = redis_url
-        self.client: redis.Redis | None = None
+        self.client: Optional[redis.Redis] = None
         self.session_prefix = "agent:session:"
         self.session_index_prefix = "agent:sessions:"
         self.session_ttl = 60 * 60 * 24 * 7  # 7 days
@@ -78,7 +78,7 @@ class SessionManager:
         logger.info(f"Created session {session_id} for agent {agent_type}")
         return session_id
 
-    async def get_session(self, session_id: str) -> dict | None:
+    async def get_session(self, session_id: str) -> Optional[dict]:
         """Get session data by ID."""
         if self.client:
             key = self._get_session_key(session_id)
@@ -137,6 +137,43 @@ class SessionManager:
     async def set_context(self, session_id: str, context: dict) -> bool:
         """Update session context."""
         return await self.update_session(session_id, {"context": context})
+
+    async def bind_workflow_scope(self, session_id: str, agent_type: str, scope: Optional[str]) -> bool:
+        """Atomically bind a session once; concurrent requests cannot switch its app."""
+        identity = scope or "__unsigned__"
+        if self.client:
+            key = self._get_session_key(session_id)
+            for _ in range(3):
+                async with self.client.pipeline(transaction=True) as pipe:
+                    try:
+                        await pipe.watch(key)
+                        raw = await pipe.get(key)
+                        if not raw:
+                            return False
+                        session = json.loads(raw)
+                        previous = session.get("workflowScope")
+                        if session.get("agentType") != agent_type or (previous is not None and previous != identity):
+                            return False
+                        if previous is None and session.get("messages") and scope is not None:
+                            return False
+                        session["workflowScope"] = identity
+                        pipe.multi()
+                        pipe.set(key, json.dumps(session), ex=self.session_ttl)
+                        await pipe.execute()
+                        return True
+                    except redis.WatchError:
+                        continue
+            return False
+        session = self._memory_store.get(session_id)
+        if not session or session.get("agentType") != agent_type:
+            return False
+        previous = session.get("workflowScope")
+        if previous is not None and previous != identity:
+            return False
+        if previous is None and session.get("messages") and scope is not None:
+            return False
+        session["workflowScope"] = identity
+        return True
 
     async def delete_session(self, session_id: str) -> bool:
         """Delete a session."""

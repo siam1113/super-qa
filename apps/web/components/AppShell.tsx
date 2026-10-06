@@ -1,7 +1,10 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useAppStore } from '@/lib/store';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Bot, Video } from 'lucide-react';
+import { THEME_PRESETS, useAppStore, type ThemePreset } from '@/lib/store';
+import { Conversation, chatRequest } from '@/lib/chat';
+import { Meeting, MeetingDetail } from '@/lib/meetings';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 import { Inspector } from './Inspector';
@@ -11,51 +14,82 @@ import { SuperQA } from './SuperQA';
 import { Dashboard } from './pages/Dashboard';
 import { TestCases } from './pages/TestCases';
 import { PlaceholderPage } from './pages/PlaceholderPages';
-import { SourcesPage } from './pages/Sources';
-import { SyncJobsPage } from './pages/SyncJobs';
-import {
-  BusinessPage,
-  BusinessFlowsPage,
-  BusinessFactsPage,
-  BusinessEntitiesPage,
-  BusinessRulesPage,
-  BusinessStatesPage,
-  BusinessPermissionsPage,
-  BusinessIntegrationsPage,
-  BusinessConstraintsPage,
-  BusinessConfigurationsPage,
-  BusinessTerminologyPage,
-  TechnicalApisPage,
-  TechnicalCodePage,
-  TechnicalArchitecturePage,
-  TechnicalDatabasePage,
-  QualityTestCasesPage,
-  QualityRequirementsPage,
-  QualityDefectsPage,
-  AutomationDomPage,
-  AutomationLocatorsPage,
-  AutomationActionsPage,
-  AutomationDataSetupPage,
-  AutomationAuthPage,
-  ProductFeaturesPage,
-  ProductPersonasPage,
-} from './pages/Business';
+import { FrameworkPage } from './pages/Framework';
+import { PipelinesPage } from './pages/Pipelines';
+import { BusinessPage, QualityDefectsPage } from './pages/Business';
 import { EnvironmentsPage } from './pages/Environments';
 import { QAEngineerPage, AutomationEngineerPage } from './pages/Agents';
 import { CommandCenterPage } from './pages/CommandCenter';
+import { SettingsPage } from './pages/Settings';
+import { UserSettingsPage } from './pages/UserSettings';
+import { OrganizationSettingsPage } from './pages/OrganizationSettings';
+import { ChatPage } from './pages/Chat';
+import { IntegrationsPage } from './pages/Integrations';
+import { ExecutionPlansPage, ExecutionsPage, AutomatedTestsPage, TestCredentialsPage, ReportsPage, CoveragePage } from './pages/OperationalPages';
+import type { Page } from '@/lib/types';
 
-export function AppShell() {
-  const { currentPage, loading, setLoading, setData, setContextCounts, theme, setCurrentPage } = useAppStore();
+export function AppShell({ initialPage }: { initialPage?: Page }) {
+  const [dataError, setDataError] = useState<string | null>(null);
+  const [impersonating, setImpersonating] = useState('');
+  const [activeCall, setActiveCall] = useState<{ meeting: Meeting; conversation: Conversation } | null>(null);
+  const [activeDetail, setActiveDetail] = useState<MeetingDetail | null>(null);
+  const [callElapsed, setCallElapsed] = useState(0);
+  const [callToJoin, setCallToJoin] = useState<{ meeting: Meeting; conversation: Conversation } | null>(null);
+  const [initialized, setInitialized] = useState(!initialPage);
+  const workspaceLoaded = useRef(false);
+  const { currentPage, loading, setLoading, setData, setContextCounts, theme, setTheme, setCurrentPage } = useAppStore();
+  const page = initialized ? currentPage : initialPage!;
+  const collaborationPage = ['chat', 'agent-qae', 'agent-aue'].includes(page);
+  const clearCallToJoin = useCallback(() => setCallToJoin(null), []);
+
+  useEffect(() => {
+    let active = true; let inFlight = false;
+    const refreshActiveCall = async () => {
+      if (!active || inFlight) return;
+      inFlight = true;
+      try {
+        const result = await fetch('/api/chat/meetings/active', { credentials: 'same-origin', cache: 'no-store' });
+        if (!result.ok) return;
+        const data = await result.json() as { meeting: Meeting | null; conversation: Conversation | null };
+        if (!active) return;
+        setActiveCall(data.meeting && data.conversation ? { meeting: data.meeting, conversation: data.conversation } : null);
+        if (data.meeting) { try { const detail = await chatRequest<MeetingDetail>('/meetings/' + data.meeting.id); if (active) setActiveDetail(detail); } catch { /* keep last known participants */ } }
+        else setActiveDetail(null);
+      } catch { /* Keep the last known call while the app reconnects. */ }
+      finally { inFlight = false; }
+    };
+    void refreshActiveCall();
+    const events = new EventSource('/api/chat/events', { withCredentials: true });
+    events.addEventListener('connected', refreshActiveCall);
+    events.addEventListener('change', refreshActiveCall);
+    const interval = window.setInterval(refreshActiveCall, 5000);
+    return () => { active = false; window.clearInterval(interval); events.close(); };
+  }, []);
+
+  useEffect(() => {
+    if (!activeCall) { setCallElapsed(0); return; }
+    const startedAt = Date.parse(activeCall.meeting.liveAt || activeCall.meeting.createdAt);
+    const update = () => setCallElapsed(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)));
+    update();
+    const timer = window.setInterval(update, 1000);
+    return () => window.clearInterval(timer);
+  }, [activeCall]);
+
+  useEffect(() => {
+    if (initialPage) setCurrentPage(initialPage);
+    setInitialized(true);
+  }, [initialPage, setCurrentPage]);
 
   // Fetch data on mount
   useEffect(() => {
+    if (page === 'settings' || page === 'user-settings' || page === 'app-settings' || page === 'status' || collaborationPage) { setLoading(false); return; }
+    if (workspaceLoaded.current) return;
+    workspaceLoaded.current = true;
     const fetchData = async () => {
       try {
-        const [workspaceRes, countsRes] = await Promise.all([
-          fetch('http://localhost:4000/api/qa/workspace'),
-          fetch('http://localhost:4000/api/qa/context-counts'),
-        ]);
+        const workspaceRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/api/qa/workspace`);
 
+        if (!workspaceRes.ok) throw new Error('Workspace API request failed');
         if (workspaceRes.ok) {
           const data = await workspaceRes.json();
           setData({
@@ -67,165 +101,124 @@ export function AppShell() {
             facts: data.facts,
           });
         }
-
-        if (countsRes.ok) {
-          const counts = await countsRes.json();
-          setContextCounts(counts);
-        }
       } catch (error) {
-        console.log('API not available, using fallback data');
-        // Fallback mock data
-        setData({
-          stats: {
-            passed: 1284,
-            passedChange: 8.2,
-            failed: 37,
-            failedChange: -12.4,
-            blocked: 9,
-            blockedChange: 2,
-            running: 14,
-            skipped: 23,
-            duration: '2h 34m',
-            aiConfidence: 91,
-            aiConfidenceChange: 3,
-            healingCount: 22,
-            healingPending: 5,
-          },
-          testCases: [
-            { id: 'TC-1001', title: 'Login with valid enterprise SSO user', priority: 'P0', automation: 'automated', owner: 'Maya Chen', flow: 'Authentication / Login', tags: ['sso', 'auth'], lastRun: new Date().toISOString(), passRate: 98, coverage: 85, risk: 'high', aiScore: 94 },
-            { id: 'TC-1002', title: 'Login with invalid credentials shows error', priority: 'P0', automation: 'automated', owner: 'Maya Chen', flow: 'Authentication / Login', tags: ['auth', 'negative'], lastRun: new Date().toISOString(), passRate: 100, coverage: 90, risk: 'high', aiScore: 96 },
-            { id: 'TC-1042', title: 'Payment decline shows error banner', priority: 'P0', automation: 'automated', owner: 'Ravi Patel', flow: 'Checkout / Payment', tags: ['payment', 'error-handling'], lastRun: new Date().toISOString(), passRate: 87, coverage: 78, risk: 'critical', aiScore: 89 },
-            { id: 'TC-1043', title: 'Successful payment redirects to confirmation', priority: 'P0', automation: 'automated', owner: 'Ravi Patel', flow: 'Checkout / Payment', tags: ['payment', 'happy-path'], lastRun: new Date().toISOString(), passRate: 95, coverage: 82, risk: 'critical', aiScore: 92 },
-            { id: 'TC-1128', title: 'Archived user cannot checkout', priority: 'P1', automation: 'partial', owner: 'Elena Garcia', flow: 'Checkout / Confirmation', tags: ['checkout', 'permissions'], lastRun: new Date().toISOString(), passRate: 75, coverage: 45, risk: 'medium', aiScore: 77 },
-          ],
-          executions: [
-            { testName: 'TC-1042 Payment decline shows error banner', testId: 'TC-1042', flow: 'Checkout / Payment', browser: 'Chrome', environment: 'Staging', status: 'failed', duration: 48, retry: 1, aiConfidence: 87, owner: 'Ravi Patel', startedAt: new Date().toISOString(), errorMessage: 'Element not found: button[data-testid="pay-now"]' },
-            { testName: 'TC-1001 Login with valid enterprise SSO user', testId: 'TC-1001', flow: 'Authentication / Login', browser: 'Chrome', environment: 'Staging', status: 'passed', duration: 12, retry: 0, aiConfidence: 98, owner: 'Maya Chen', startedAt: new Date().toISOString() },
-            { testName: 'TC-1201 Add item to cart from product page', testId: 'TC-1201', flow: 'Checkout / Add Item', browser: 'Firefox', environment: 'Production', status: 'passed', duration: 8, retry: 0, aiConfidence: 99, owner: 'Elena Garcia', startedAt: new Date().toISOString() },
-            { testName: 'TC-1128 Archived user cannot checkout', testId: 'TC-1128', flow: 'Checkout / Confirmation', browser: 'Chrome', environment: 'Staging', status: 'blocked', duration: 0, retry: 0, aiConfidence: 65, owner: 'Elena Garcia', startedAt: new Date().toISOString(), errorMessage: 'Test data setup failed' },
-            { testName: 'TC-1043 Successful payment redirects to confirmation', testId: 'TC-1043', flow: 'Checkout / Payment', browser: 'Chrome', environment: 'Staging', status: 'running', duration: 0, retry: 0, aiConfidence: 91, owner: 'Ravi Patel', startedAt: new Date().toISOString() },
-          ],
-          healingSuggestions: [
-            { issue: 'button[data-testid="pay-now"] no longer found', affectedTests: ['TC-1042', 'TC-1043', 'TC-1044'], currentLocator: 'button[data-testid="pay-now"]', suggestedLocator: "getByRole('button', { name: 'Pay now' })", confidence: 94, risk: 'low', owner: 'Healer Agent', status: 'pending', rootCause: 'Button testid was removed in recent commit. Role-based locator is more stable.' },
-            { issue: '#login-email selector ambiguous', affectedTests: ['TC-1001', 'TC-1002', 'TC-1003'], currentLocator: '#login-email', suggestedLocator: "getByLabel('Email address')", confidence: 89, risk: 'low', owner: 'Healer Agent', status: 'pending', rootCause: 'Multiple elements match #login-email. Label-based selector is unique.' },
-            { issue: 'Cart total XPath fragile', affectedTests: ['TC-1201', 'TC-1202'], currentLocator: '/html/body/div[2]/main/div[3]/span[2]', suggestedLocator: "[data-testid='cart-total']", confidence: 78, risk: 'medium', owner: 'Healer Agent', status: 'pending', rootCause: 'Absolute XPath breaks on DOM changes. Test ID recommended.' },
-          ],
-          flows: [
-            { name: 'Login', module: 'Authentication', description: 'User authentication via email/password or SSO', risk: 'high', priority: 'P0', coverage: 88, automation: 95, relatedPages: ['Login Page', 'SSO Redirect'], dependencies: [] },
-            { name: 'Registration', module: 'Authentication', description: 'New user account creation flow', risk: 'high', priority: 'P0', coverage: 75, automation: 80, relatedPages: ['Registration Page', 'Email Verification'], dependencies: [] },
-            { name: 'Payment', module: 'Checkout', description: 'Process payment with various methods', risk: 'critical', priority: 'P0', coverage: 78, automation: 85, relatedPages: ['Payment Page', 'Card Entry'], dependencies: ['Login'] },
-            { name: 'Add Item', module: 'Checkout', description: 'Add products to shopping cart', risk: 'high', priority: 'P0', coverage: 92, automation: 98, relatedPages: ['Product Page', 'Cart Page'], dependencies: ['Login'] },
-          ],
-          facts: [
-            { text: 'A locked account cannot start checkout', category: 'business_rule', confidence: 96, source: 'Confluence: Checkout Requirements', createdBy: 'Context Manager Agent', aiGenerated: true, humanVerified: true, relatedObjects: ['TC-1128'] },
-            { text: 'SSO login bypasses MFA for enterprise users', category: 'business_rule', confidence: 92, source: 'Jira: AUTH-445', createdBy: 'Context Manager Agent', aiGenerated: true, humanVerified: true, relatedObjects: ['TC-1001'] },
-            { text: 'Payment timeout is 30 seconds before retry prompt', category: 'constraint', confidence: 88, source: 'API Documentation', createdBy: 'Ravi Patel', aiGenerated: false, humanVerified: true, relatedObjects: ['TC-1042', 'TC-1043'] },
-          ],
-        });
-        // Fallback context counts - use 0 for all if no real data
-        setContextCounts({
-          sources: 0,
-          flows: 0,
-          facts: 0,
-          entities: 0,
-          rules: 0,
-          states: 0,
-          permissions: 0,
-          integrations: 0,
-          constraints: 0,
-          configurations: 0,
-          terminology: 0,
-          features: 0,
-          personas: 0,
-          apis: 0,
-          code: 0,
-          architecture: 0,
-          database: 0,
-          testCases: 0,
-          requirements: 0,
-          defects: 0,
-          dom: 0,
-          locators: 0,
-          actions: 0,
-          dataSetup: 0,
-          auth: 0,
-        });
+        setDataError('Workspace data is unavailable. No demo results are substituted. Check the API and refresh.');
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, [setData, setLoading, setContextCounts]);
+  }, [page, collaborationPage, setData, setLoading, setContextCounts]);
+
+  // Context counts change as syncs publish new items. Keep sidebar badges fresh
+  // independently of the one-time workspace snapshot fetch above.
+  useEffect(() => {
+    let active = true;
+    let inFlight = false;
+    const refreshContextCounts = async () => {
+      if (!active || inFlight || document.visibilityState !== 'visible') return;
+      inFlight = true;
+      try {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/api/qa/context-counts`);
+        if (!response.ok) return;
+        const counts = await response.json();
+        if (active) setContextCounts(counts);
+      } catch {
+        // Keep the last known counts when the API is temporarily unavailable.
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    void refreshContextCounts();
+    const events = new EventSource(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/api/sources/events`);
+    let refreshTimer: number | undefined;
+    const updateCounts = (event: Event) => {
+      try {
+        const payload = JSON.parse((event as MessageEvent).data);
+        if (!['completed', 'failed', 'cancelled'].includes(payload.update?.status)) return;
+      } catch { return; }
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => void refreshContextCounts(), 750);
+    };
+    events.addEventListener('job-update', updateCounts);
+    events.addEventListener('connected', refreshContextCounts);
+    window.addEventListener('focus', refreshContextCounts);
+    document.addEventListener('visibilitychange', refreshContextCounts);
+    return () => {
+      active = false;
+      events.close();
+      if (refreshTimer) clearTimeout(refreshTimer);
+      window.removeEventListener('focus', refreshContextCounts);
+      document.removeEventListener('visibilitychange', refreshContextCounts);
+    };
+  }, [setContextCounts]);
 
   // Apply theme class
   useEffect(() => {
-    document.documentElement.classList.remove('dark', 'light');
-    document.documentElement.classList.add(theme);
-  }, [theme]);
+    try {
+      const persisted = window.localStorage.getItem('superqa-theme');
+      if (persisted && THEME_PRESETS.includes(persisted as ThemePreset)) { setTheme(persisted as ThemePreset); return; }
+    } catch { /* Use the default theme if browser storage is unavailable. */ }
+    setTheme(theme);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    void fetch('/api/auth/session', { credentials: 'same-origin', cache: 'no-store' })
+      .then(response => response.ok ? response.json() : null)
+      .then(session => { if (active && session?.user?.impersonated) setImpersonating(session.user.email); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
+  const exitImpersonation = async () => {
+    const response = await fetch('/api/auth/end-impersonation', { method: 'POST', credentials: 'same-origin' });
+    if (!response.ok) { window.location.assign('/login'); return; }
+    window.location.assign('/admin');
+  };
 
   const renderPage = () => {
-    switch (currentPage) {
+    switch (page) {
+      case 'chat':
+        return <ChatPage joinMeeting={callToJoin} onMeetingOpened={clearCallToJoin} />;
+      case 'integrations':
+        return <IntegrationsPage />;
+      case 'settings':
+        return <SettingsPage />;
+      case 'user-settings':
+        return <UserSettingsPage />;
+      case 'app-settings':
+        return <OrganizationSettingsPage />;
       case 'dashboard':
         return <Dashboard />;
+      case 'executions':
+        return <ExecutionsPage />;
       case 'test-cases':
         return <TestCases />;
+      case 'execution-plans':
+        return <ExecutionPlansPage />;
+      case 'automated-tests':
+        return <AutomatedTestsPage />;
+      case 'test-credentials':
+        return <TestCredentialsPage />;
+      case 'reports':
+        return <ReportsPage />;
+      case 'coverage':
+        return <CoveragePage />;
+      case 'frameworks':
+        return <FrameworkPage />;
       case 'sources':
-        return <SourcesPage onViewAllJobs={() => setCurrentPage('sync-jobs')} />;
+      case 'pipelines':
+        return <PipelinesPage onOpenIntegrations={() => setCurrentPage('integrations')} />;
       case 'sync-jobs':
-        return <SyncJobsPage onNavigateBack={() => setCurrentPage('sources')} />;
+        return <PipelinesPage onOpenIntegrations={() => setCurrentPage('integrations')} />;
       case 'business':
         return <BusinessPage />;
-      case 'business-flows':
-        return <BusinessFlowsPage />;
-      case 'business-facts':
-        return <BusinessFactsPage />;
-      case 'business-entities':
-        return <BusinessEntitiesPage />;
-      case 'business-rules':
-        return <BusinessRulesPage />;
-      case 'business-states':
-        return <BusinessStatesPage />;
-      case 'business-permissions':
-        return <BusinessPermissionsPage />;
-      case 'business-integrations':
-        return <BusinessIntegrationsPage />;
-      case 'business-constraints':
-        return <BusinessConstraintsPage />;
-      case 'business-configurations':
-        return <BusinessConfigurationsPage />;
-      case 'business-terminology':
-        return <BusinessTerminologyPage />;
-      // Technical
-      case 'technical-apis':
-        return <TechnicalApisPage />;
-      case 'technical-code':
-        return <TechnicalCodePage />;
-      case 'technical-architecture':
-        return <TechnicalArchitecturePage />;
-      case 'technical-database':
-        return <TechnicalDatabasePage />;
       // Quality
-      case 'requirements':
-        return <QualityRequirementsPage />;
       case 'defects':
         return <QualityDefectsPage />;
-      // Automation
-      case 'dom':
-        return <AutomationDomPage />;
-      case 'locators':
-        return <AutomationLocatorsPage />;
-      case 'actions':
-        return <AutomationActionsPage />;
-      case 'data-setup':
-        return <AutomationDataSetupPage />;
-      case 'auth':
-        return <AutomationAuthPage />;
-      // Product
-      case 'features':
-        return <ProductFeaturesPage />;
-      case 'personas':
-        return <ProductPersonasPage />;
       // Environments
       case 'environments':
         return <EnvironmentsPage />;
@@ -241,34 +234,54 @@ export function AppShell() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-canvas">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-accent-purple animate-pulse" />
-          <p className="text-text-secondary">Loading workspace...</p>
-        </div>
-      </div>
-    );
-  }
+  const callTimerLabel = `${Math.floor(callElapsed / 60).toString().padStart(2, '0')}:${(callElapsed % 60).toString().padStart(2, '0')}`;
+  const callAvatars: { key: string; label: string; agent?: boolean }[] = activeCall ? [
+    ...(activeDetail?.peers || []).map(peer => ({ key: peer.memberId, label: peer.name })),
+    ...(activeCall.meeting.agentParticipants?.length ? activeCall.meeting.agentParticipants.map(item => ({ key: item.agentId, label: 'AI', agent: true })) : activeCall.meeting.agentId ? [{ key: activeCall.meeting.agentId, label: 'AI', agent: true }] : []),
+  ] : [];
+  const visibleCallAvatars = callAvatars.slice(0, 3);
+  const extraCallAvatars = callAvatars.length - visibleCallAvatars.length;
 
   return (
     <div className="h-screen flex flex-col bg-canvas">
+      {impersonating && <div role="alert" className="flex shrink-0 flex-wrap items-center justify-center gap-2 bg-warning px-4 py-2 text-center text-sm font-medium text-black"><span>Temporary support session as {impersonating} · changes are made as this user</span><button type="button" onClick={() => void exitImpersonation()} className="rounded-md border border-black/25 px-3 py-1 text-xs font-semibold hover:bg-black/10">Exit impersonation</button></div>}
       <div className="flex-1 flex overflow-hidden">
-        <Sidebar />
+        <div className={collaborationPage ? 'hidden lg:flex' : 'flex'}><Sidebar /></div>
         <div className="flex-1 flex flex-col overflow-hidden">
-          <TopBar />
-          <main className="flex-1 overflow-hidden">
-            {renderPage()}
-          </main>
+          <div className={collaborationPage ? 'hidden md:block' : ''}><TopBar /></div>
+          {activeCall && <div role="status" className="flex shrink-0 items-center justify-between gap-4 border-b border-accent-blue/20 bg-accent-blue/8 px-4 py-2.5 md:px-7">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="relative grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-accent-blue/15 text-accent-blue"><Video size={16} /><i className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-accent-blue shadow-[0_0_0_2px_var(--bg-canvas)]" /></span>
+              <div className="min-w-0">
+                <p className="truncate text-xs font-semibold text-text-primary">{activeCall.conversation.title}</p>
+                <p className="flex items-center gap-1.5 text-[11px] text-text-secondary"><span className="font-semibold tabular-nums text-accent-blue">{callTimerLabel}</span><span aria-hidden="true">·</span>Ongoing call</p>
+              </div>
+              {callAvatars.length > 0 && <div className="ml-1 flex shrink-0 items-center" aria-label={callAvatars.length + ' on the call'}>
+                {visibleCallAvatars.map(item => <span key={item.key} title={item.agent ? 'AI agent' : item.label} className={'-ml-2 grid h-7 w-7 place-items-center rounded-full border-2 border-canvas text-[10px] font-semibold text-white first:ml-0 ' + (item.agent ? 'bg-accent-purple/80' : 'bg-accent-blue/80')}>{item.agent ? <Bot size={12} /> : item.label.trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase() || '?'}</span>)}
+                {extraCallAvatars > 0 && <span className="-ml-2 grid h-7 w-7 place-items-center rounded-full border-2 border-canvas bg-elevated text-[10px] font-semibold text-text-secondary">+{extraCallAvatars}</span>}
+              </div>}
+            </div>
+            <button className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-accent-blue px-3 py-2 text-xs font-semibold text-white transition hover:opacity-90 active:scale-95" onClick={() => { setCallToJoin(activeCall); setCurrentPage('chat'); }}><Video size={14} />Join in</button>
+          </div>}
+          {dataError && page !== 'settings' && page !== 'user-settings' && page !== 'app-settings' && !collaborationPage && <div role="alert" className="p-3 bg-danger/10 text-danger">{dataError} <a className="underline" href="/settings">Open scoped Settings</a></div>}
+          <div className="flex-1 flex overflow-hidden">
+            <main className="flex-1 overflow-hidden">
+              {/* Agent chat pages stay mounted across navigation (hidden, not unmounted) so an
+                  in-flight streaming turn keeps updating in the background instead of being
+                  lost from the thread when the user switches to another page and back. */}
+              <div className={page === 'agent-qae' ? 'h-full' : 'hidden'}><QAEngineerPage /></div>
+              <div className={page === 'agent-aue' ? 'h-full' : 'hidden'}><AutomationEngineerPage /></div>
+              {page !== 'agent-qae' && page !== 'agent-aue' && (loading && page !== 'settings' && page !== 'user-settings' && page !== 'app-settings' && !collaborationPage ? <div className="p-8 text-text-secondary">Loading workspace… Use the sidebar for settings.</div> : renderPage())}
+            </main>
+            {!collaborationPage && <Inspector />}
+          </div>
         </div>
-        <Inspector />
       </div>
 
       {/* Overlays */}
       <CommandPalette />
       <NotificationCenter />
-      <SuperQA />
+      {!collaborationPage && <SuperQA />}
     </div>
   );
 }

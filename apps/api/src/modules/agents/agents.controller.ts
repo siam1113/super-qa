@@ -7,16 +7,26 @@ import {
   Body,
   Param,
   Query,
+  Sse,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { Observable } from 'rxjs';
+import { InjectRepository } from '@nestjs/typeorm';
+import { In, Repository } from 'typeorm';
 import { AgentsService, ChatRequest, CreateTaskDto, UpdateTaskDto } from './agents.service';
 import { AgentType } from './types';
 import { TaskStatus } from './entities/agent-task.entity';
+import { WorkerWakeupService } from '../../common/worker-wakeup.service';
+import { OutpostRun } from '../outpost/outpost.entity';
 
 @Controller('agents')
 export class AgentsController {
-  constructor(private readonly agentsService: AgentsService) {}
+  constructor(
+    private readonly agentsService: AgentsService,
+    private readonly wakeups: WorkerWakeupService,
+    @InjectRepository(OutpostRun) private readonly outpostRuns: Repository<OutpostRun>,
+  ) {}
 
   /**
    * Get agent configurations
@@ -57,11 +67,19 @@ export class AgentsController {
   @Get(':agentType/sessions')
   async getSessions(@Param('agentType') agentType: AgentType) {
     const sessions = await this.agentsService.getSessionsByType(agentType);
+    const sessionIds = sessions.map((session) => session.id);
+    const pending = sessionIds.length
+      ? await this.outpostRuns.find({ where: { sessionId: In(sessionIds), approvalStatus: 'pending' } })
+      : [];
+    const awaitingApproval = new Set(pending.map((run) => run.sessionId));
     return sessions.map((session) => ({
       id: session.id,
       agentType: session.agentType,
       status: session.status,
       messageCount: session.messages?.length || 0,
+      preview: session.messages?.find((message) => message.role === 'user')?.content?.slice(0, 90) || '',
+      needsHelpReason: session.status === 'needs_help' ? (session.context as { needsHelp?: { reason?: string } })?.needsHelp?.reason || null : null,
+      needsApproval: awaitingApproval.has(session.id),
       createdAt: session.createdAt,
       updatedAt: session.updatedAt,
     }));
@@ -107,7 +125,26 @@ export class AgentsController {
     };
   }
 
+  /**
+   * List executions currently being streamed live by the agents runtime
+   */
+  @Get('executions/live')
+  async getLiveExecutions() {
+    return this.agentsService.getLiveExecutions();
+  }
+
   // ============ Task Endpoints ============
+
+  @Sse(':agentType/tasks/events')
+  taskEvents(@Param('agentType') agentType: AgentType): Observable<{ type: string; data: object }> {
+    return new Observable(subscriber => {
+      const unsubscribe = this.wakeups.subscribe('agent_task_available', payload => {
+        if (payload?.agentType === agentType) subscriber.next({ type: 'change', data: { id: payload.id } });
+      });
+      subscriber.next({ type: 'connected', data: { ready: true } });
+      return unsubscribe;
+    });
+  }
 
   /**
    * Get all tasks for an agent type

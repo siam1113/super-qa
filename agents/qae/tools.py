@@ -12,7 +12,7 @@ import json
 import uuid
 import asyncio
 from datetime import datetime
-from typing import Literal, Optional, List, Dict, Any
+from typing import Literal, Optional, List, Dict, Any, Union
 import httpx
 from langchain_core.tools import tool
 
@@ -116,7 +116,7 @@ async def _get_automation_context(test_id: str) -> Dict[str, Any]:
 
 # ============ Helper Functions ============
 
-async def _api_get(endpoint: str, params: dict = None) -> dict | list | None:
+async def _api_get(endpoint: str, params: dict = None) -> Union[dict, list, None]:
     """Make a GET request to the backend API."""
     async with httpx.AsyncClient(timeout=30.0) as client:
         try:
@@ -129,7 +129,7 @@ async def _api_get(endpoint: str, params: dict = None) -> dict | list | None:
     return None
 
 
-async def _api_post(endpoint: str, data: dict = None) -> dict | None:
+async def _api_post(endpoint: str, data: dict = None) -> Optional[dict]:
     """Make a POST request to the backend API."""
     async with httpx.AsyncClient(timeout=30.0) as client:
         try:
@@ -366,21 +366,21 @@ async def _execute_test_case_mcp(
     environment: str,
     browser: str,
     trace_level: str,
-) -> str:
-    """Execute test case using MCP-based harness."""
+    return_raw: bool = False,
+):
+    """Execute test case using MCP-based harness.
+
+    When return_raw is True, returns the structured ExecutionState dict instead of
+    a markdown report, for callers (e.g. a direct backend-to-backend bridge) that
+    need the data rather than LLM-facing text.
+    """
     # Get test case specification from backend
     test_case = await _api_get(f"qa/test-cases/{test_id}")
 
     if not test_case:
-        # Create a simple test spec for demo
-        test_case = {
-            "id": test_id,
-            "name": f"Test {test_id}",
-            "steps": [
-                {"action": "Navigate to the application", "expected": "Page loads successfully"},
-                {"action": "Verify page content is visible", "expected": "Content is displayed"},
-            ],
-        }
+        if return_raw:
+            raise ValueError(f"Execution unavailable: test definition {test_id} could not be loaded")
+        return f"Execution unavailable: test definition {test_id} could not be loaded. No test was run."
 
     # Get the orchestrator
     orchestrator = get_orchestrator()
@@ -392,6 +392,9 @@ async def _execute_test_case_mcp(
         browser=browser,
         trace_level=trace_level,
     )
+
+    if return_raw:
+        return state.to_dict()
 
     # Generate step-based report
     report = format_step_report(state)
@@ -1407,13 +1410,41 @@ Would you like me to:
 
 # ============ Tool Registration ============
 
+@tool
+async def import_test_cases_to_plan(request_id: str) -> str:
+    """Import a completed design_test_cases run's cases into Plan > Test Cases as drafts.
+
+    Only call this after the user explicitly confirms they want the cases imported; otherwise
+    the cases remain visible only as the workflow artifact. Reviewing/approving imported cases
+    still happens in Plan > Test Cases, not here.
+
+    Args:
+        request_id: The design_test_cases run's request_id (from its skill result).
+    """
+    import re
+    from shared.skills.scope import current_scope
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}", request_id or ""):
+        return json.dumps({"error": "That is not a request_id UUID. Ask the user for the design_test_cases run's request_id instead of guessing one."})
+    project_id = current_scope().identity
+    if project_id == "local":
+        return json.dumps({"error": "No app workspace is scoped to this session; the cases remain in the workflow artifact only."})
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        try:
+            response = await client.post(f"{BACKEND_URL}/qa/test-cases/import-artifact-by-request",
+                                         json={"projectId": project_id, "requestId": request_id})
+        except Exception as error:
+            return json.dumps({"error": f"Import request failed: {error}"})
+    try:
+        body = response.json()
+    except Exception:
+        return json.dumps({"error": "Import service returned an unreadable response"})
+    if response.status_code >= 400:
+        return json.dumps({"error": body.get("message", "Import failed")})
+    return json.dumps({"createdCount": body.get("createdCount"), "alreadyImported": body.get("alreadyImported"), "invalid": body.get("invalid")})
+
+
 def create_qae_tools() -> list:
-    """Create the complete list of QAE tools."""
-    return [
-        write_test_cases,
-        execute_test_case,
-        execute_test_suite,
-        generate_report,
-        analyze_bug,
-        test_user_story,
-    ]
+    """Register structured workflows; legacy helpers remain for existing callers."""
+    from shared.tools import retrieve_source_evidence, search_knowledge, get_platform_stats
+    from shared.skills.tools import create_skill_tools
+    return [retrieve_source_evidence, search_knowledge, get_platform_stats, import_test_cases_to_plan, *create_skill_tools("qae")]

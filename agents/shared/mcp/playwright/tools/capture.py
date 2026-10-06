@@ -11,6 +11,54 @@ from ..types import ActionStatus
 logger = logging.getLogger(__name__)
 
 
+async def accessibility_snapshot(
+    page_id: str,
+    depth: Optional[int] = None,
+) -> Dict[str, Any]:
+    """
+    Capture the page's ARIA accessibility snapshot: a compact, YAML-like text view
+    of what's actually on screen and clickable/fillable right now (roles, names,
+    hierarchy). This is the primary grounding signal for deciding what to do next
+    on a vague step — far cheaper and more precise for that purpose than full HTML
+    or a screenshot.
+
+    Args:
+        page_id: The page to snapshot
+        depth: Optional limit on how deep the snapshot tree goes
+
+    Returns:
+        A YAML-like string snapshot of the page's accessibility tree
+    """
+    manager = get_browser_manager()
+    page = manager.get_page(page_id)
+
+    if not page:
+        return {
+            "status": ActionStatus.ERROR.value,
+            "errorMessage": f"Page not found: {page_id}",
+        }
+
+    start_time = time.time()
+
+    try:
+        snapshot = await page.aria_snapshot(depth=depth)
+        return {
+            "status": ActionStatus.SUCCESS.value,
+            "actionType": "accessibility_snapshot",
+            "snapshot": snapshot,
+            "durationMs": int((time.time() - start_time) * 1000),
+            "timestamp": datetime.now().isoformat(),
+        }
+    except Exception as e:
+        return {
+            "status": ActionStatus.ERROR.value,
+            "actionType": "accessibility_snapshot",
+            "errorMessage": str(e),
+            "durationMs": int((time.time() - start_time) * 1000),
+            "timestamp": datetime.now().isoformat(),
+        }
+
+
 async def screenshot(
     page_id: str,
     full_page: bool = False,

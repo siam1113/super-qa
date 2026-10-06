@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import * as crypto from 'crypto';
@@ -9,6 +9,7 @@ import { Chunk } from './entities/chunk.entity';
 import { ConnectorDocument } from '../sources/connectors/connector.interface';
 import { GraphService, NodeType, RelationType } from '../graph/graph.service';
 import { StorageService } from '../storage/storage.service';
+import { EvidenceScope, validateScope, cosineSimilarity, validVector } from '../retrieval/evidence-contract';
 
 @Injectable()
 export class DocumentsService {
@@ -58,8 +59,21 @@ export class DocumentsService {
     return document;
   }
 
-  async upsertDocuments(sourceId: string, connectorDocuments: ConnectorDocument[]): Promise<number> {
-    let processed = 0;
+  async upsertDocuments(
+    sourceId: string,
+    connectorDocuments: ConnectorDocument[],
+    syncJobId?: string,
+    forceReprocess = false,
+    options: { deferQueue?: boolean } = {},
+  ): Promise<{ total: number; queued: number; skipped: number; documentIds: string[] }> {
+    let total = 0;
+    let queued = 0;
+    let skipped = 0;
+    const documentIds = new Set<string>();
+
+    this.logger.log(
+      `Upserting ${connectorDocuments.length} documents for source ${sourceId}${forceReprocess ? ' (force reprocess)' : ''}`,
+    );
 
     for (const doc of connectorDocuments) {
       const contentHash = this.hashContent(doc.content);
@@ -70,13 +84,17 @@ export class DocumentsService {
       });
 
       if (existing) {
-        if (existing.contentHash === contentHash) {
-          // Content unchanged, skip
+        if (!forceReprocess && existing.contentHash === contentHash) {
+          // Content unchanged and not forcing reprocess, skip processing
+          skipped++;
+          total++;
+          this.logger.debug(`Document ${doc.externalId} unchanged, skipping`);
           continue;
         }
 
         // Update existing document
         existing.title = doc.title;
+        existing.type = doc.type;
         existing.content = doc.content;
         existing.url = doc.url || null;
         existing.metadata = doc.metadata || null;
@@ -87,9 +105,19 @@ export class DocumentsService {
         await this.chunkRepository.delete({ documentId: existing.id });
 
         // Queue for reprocessing
-        await this.processingQueue.add('process-document', {
-          documentId: existing.id,
-        });
+        documentIds.add(existing.id);
+        if (!options.deferQueue) {
+          await this.processingQueue.add('process-document', {
+            documentId: existing.id,
+            syncJobId,
+          });
+          queued++;
+        }
+        if (forceReprocess && existing.contentHash === contentHash) {
+          this.logger.debug(`Document ${doc.externalId} forced reprocess (content unchanged)`);
+        } else {
+          this.logger.debug(`Document ${doc.externalId} updated, prepared for processing`);
+        }
       } else {
         // Create new document
         const newDoc = this.documentRepository.create({
@@ -105,12 +133,18 @@ export class DocumentsService {
         const saved = await this.documentRepository.save(newDoc);
 
         // Queue for processing
-        await this.processingQueue.add('process-document', {
-          documentId: saved.id,
-        });
+        documentIds.add(saved.id);
+        if (!options.deferQueue) {
+          await this.processingQueue.add('process-document', {
+            documentId: saved.id,
+            syncJobId,
+          });
+          queued++;
+        }
 
         // Sync to graph database
         await this.syncDocumentToGraph(saved);
+        this.logger.debug(`Document ${doc.externalId} created, prepared for processing (ID: ${saved.id})`);
       }
 
       // Handle attachments if present
@@ -124,10 +158,43 @@ export class DocumentsService {
         }
       }
 
-      processed++;
+      total++;
     }
 
-    return processed;
+    this.logger.log(`Upsert complete: ${total} total, ${queued} queued, ${skipped} skipped`);
+    return { total, queued, skipped, documentIds: [...documentIds] };
+  }
+
+  /**
+   * Queue documents for background processing (indexing)
+   * Used when documents are saved but need to be queued separately after metadata is set
+   */
+  async queueDocumentsForProcessing(sourceId: string, syncJobId: string, documentIds: string[]): Promise<number> {
+    const documents = await this.findByManifest(sourceId, documentIds);
+
+    this.logger.log(`Queuing ${documents.length} documents for processing (source: ${sourceId}, job: ${syncJobId})`);
+
+    // Queue each document for processing
+    for (const doc of documents) {
+      await this.processingQueue.add('process-document', {
+        documentId: doc.id,
+        syncJobId,
+      }, { jobId: `sync-${syncJobId}-document-${doc.id}` });
+    }
+
+    return documents.length;
+  }
+
+  async findByManifest(sourceId: string, documentIds: string[]): Promise<Document[]> {
+    const uniqueIds = [...new Set(documentIds)];
+    if (uniqueIds.length === 0) return [];
+    const documents = await this.documentRepository.find({
+      where: { sourceId, id: In(uniqueIds) },
+    });
+    if (documents.length !== uniqueIds.length) {
+      throw new Error('Sync manifest contains missing or foreign-source documents');
+    }
+    return documents;
   }
 
   /**
@@ -253,6 +320,9 @@ export class DocumentsService {
   }
 
   async saveChunks(documentId: string, chunks: { content: string; index: number; embedding: number[] | null }[]): Promise<void> {
+    const startTime = Date.now();
+    this.logger.log(`💾 DB: Saving ${chunks.length} chunks to database for document ${documentId.slice(0, 8)}...`);
+
     const chunkEntities = chunks.map((chunk) =>
       this.chunkRepository.create({
         documentId,
@@ -263,27 +333,45 @@ export class DocumentsService {
     );
 
     await this.chunkRepository.save(chunkEntities);
+    const elapsed = Date.now() - startTime;
+    this.logger.log(`✅ DB: Saved ${chunks.length} chunks in ${elapsed}ms`);
   }
 
-  async searchByEmbedding(embedding: number[], limit = 10): Promise<Chunk[]> {
-    // For now, we'll do a simple JS-based similarity search
-    // Once pgvector is properly set up, we can use SQL: ORDER BY embedding <=> $1
-    const allChunks = await this.chunkRepository.find({
-      where: {},
-      relations: ['document'],
-    });
+  async searchByEmbedding(embedding: number[], limit: number, scope: EvidenceScope): Promise<Chunk[]> {
+    validateScope(scope);
+    if (!validVector(embedding) || !Number.isInteger(limit) || limit < 1 || limit > 50) throw new BadRequestException('Invalid embedding or result limit');
+    const query = this.chunkRepository.createQueryBuilder('chunk').innerJoinAndSelect('chunk.document', 'document')
+      .where('document.sourceId IN (:...sourceIds)', { sourceIds: scope.sourceIds })
+      .andWhere("chunk.metadata ->> 'revisionHash' = document.processedHash");
+    if (scope.documentTypes) query.andWhere('document.type IN (:...documentTypes)', { documentTypes: scope.documentTypes });
+    const allChunks = await query.take(10001).getMany();
+    if (allChunks.length > 10000) throw new BadRequestException('Retrieval candidate budget exceeded; narrow the source scope');
 
     // Calculate cosine similarity
     const withSimilarity = allChunks
-      .filter((chunk) => chunk.embedding && chunk.embedding.length > 0)
+      .filter((chunk) => chunk.content.trim() && validVector(chunk.embedding) && chunk.embedding.length === embedding.length)
       .map((chunk) => ({
         chunk,
-        similarity: this.cosineSimilarity(embedding, chunk.embedding!),
+        similarity: cosineSimilarity(embedding, chunk.embedding!),
       }))
-      .sort((a, b) => b.similarity - a.similarity)
+      .sort((a, b) => b.similarity - a.similarity || a.chunk.id.localeCompare(b.chunk.id))
       .slice(0, limit);
 
     return withSimilarity.map((item) => item.chunk);
+  }
+
+  async resolveCitation(documentId: string, chunkId: string, revisionHash: string, scope: EvidenceScope): Promise<Chunk> {
+    validateScope(scope);
+    const document = await this.documentRepository.findOne({ where: {
+      id: documentId, sourceId: In(scope.sourceIds), ...(scope.documentTypes ? { type: In(scope.documentTypes) } : {}),
+    } });
+    if (!document) throw new NotFoundException('Evidence document not found in scope');
+    if (!document.processedHash || document.processedHash !== revisionHash) throw new ConflictException('Evidence revision is stale; retrieve current evidence');
+    const chunk = await this.chunkRepository.findOne({ where: { id: chunkId, documentId }, relations: ['document'] });
+    if (!chunk || !scope.sourceIds.includes(chunk.document.sourceId) ||
+        (scope.documentTypes && !scope.documentTypes.includes(chunk.document.type)) ||
+        chunk.metadata?.revisionHash !== revisionHash || chunk.document.processedHash !== revisionHash) throw new ConflictException('Evidence chunk is no longer current');
+    return chunk;
   }
 
   private cosineSimilarity(a: number[], b: number[]): number {

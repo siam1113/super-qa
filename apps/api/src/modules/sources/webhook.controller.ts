@@ -12,8 +12,7 @@ import {
 import { Request } from 'express';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { InjectQueue } from '@nestjs/bull';
-import { Queue } from 'bull';
+import { PipelineStore } from '../pipeline/pipeline.store';
 import * as crypto from 'crypto';
 import { Source } from './entities/source.entity';
 import { GitHubConnector } from './connectors/github.connector';
@@ -29,8 +28,7 @@ export class WebhookController {
   constructor(
     @InjectRepository(Source)
     private sourceRepository: Repository<Source>,
-    @InjectQueue('sync')
-    private syncQueue: Queue,
+    private pipeline: PipelineStore,
   ) {
     this.connectors = new Map();
     this.connectors.set('github', new GitHubConnector());
@@ -75,10 +73,7 @@ export class WebhookController {
 
     if (documents.length > 0) {
       // Queue for processing
-      await this.syncQueue.add('webhook-update', {
-        sourceId,
-        documents,
-      });
+      await this.pipeline.start(sourceId, { documents }, 'webhook');
 
       this.logger.log(`Queued ${documents.length} documents from GitHub webhook`);
     }
@@ -110,10 +105,7 @@ export class WebhookController {
     const documents = this.processJiraWebhook(payload);
 
     if (documents.length > 0) {
-      await this.syncQueue.add('webhook-update', {
-        sourceId,
-        documents,
-      });
+      await this.pipeline.start(sourceId, { documents }, 'webhook');
 
       this.logger.log(`Queued ${documents.length} documents from Jira webhook`);
     }
@@ -145,10 +137,7 @@ export class WebhookController {
     const documents = this.processConfluenceWebhook(payload);
 
     if (documents.length > 0) {
-      await this.syncQueue.add('webhook-update', {
-        sourceId,
-        documents,
-      });
+      await this.pipeline.start(sourceId, { documents }, 'webhook');
 
       this.logger.log(`Queued ${documents.length} documents from Confluence webhook`);
     }
@@ -184,10 +173,7 @@ export class WebhookController {
     const documents = await connector.handleWebhook(payload, headers);
 
     if (documents.length > 0) {
-      await this.syncQueue.add('webhook-update', {
-        sourceId,
-        documents,
-      });
+      await this.pipeline.start(sourceId, { documents }, 'webhook');
     }
 
     return { received: true, documents: documents.length };

@@ -1,0 +1,37 @@
+name: Bounded autonomy verification
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: npm ci
+      - run: python -m pip install -r agents/requirements.txt
+      - run: python -m pip install playwright==1.60.0
+      - run: python -m playwright install --with-deps chromium
+      - run: npm run build -w apps/api
+      - run: npm run build:settings-e2e -w apps/web
+      - run: npm test -w apps/api -- --runInBand --silent
+      - run: PYTHONPATH=agents python -m unittest discover -s agents/tests
+      - run: docker build -t superqa-browser:v1 agents/shared/harness/sandbox
+      - run: docker compose -p qa-pipeline-tests -f docker-compose.pipeline-test.yml up -d --wait
+      - run: npm exec -w apps/api -- jest test/integration/autonomy.test.ts test/integration/browser-execution.test.ts test/integration/harness.test.ts test/integration/pipeline-recovery.test.ts test/integration/qa-workflows.test.ts --runInBand --silent
+        env:
+          HARNESS_DOCKER_E2E: '1'
+          SETTINGS_UI_E2E: '1'
+      - if: always()
+        run: docker compose -p qa-pipeline-tests -f docker-compose.pipeline-test.yml down --volumes

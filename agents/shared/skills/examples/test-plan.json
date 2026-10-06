@@ -1,0 +1,24 @@
+{
+  "request_id": "b7156652-04e3-4b36-a6c7-d7dc33fe3185",
+  "agent_type": "qae",
+  "skill": "plan_tests",
+  "inputs": {
+    "requirements": [
+      {
+        "id": "REQ-1",
+        "title": "Display the submitted item",
+        "impact": 4,
+        "likelihood": 3,
+        "criteria": [
+          {
+            "id": "AC-1",
+            "text": "Submitting a valid item displays it in the list",
+            "steps": [{"action": "Submit a valid item", "expected": "The item is displayed in the list"}]
+          }
+        ]
+      }
+    ],
+    "environments": ["staging"],
+    "test_types": ["functional"]
+  }
+}

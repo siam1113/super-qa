@@ -1,5 +1,37 @@
 import { create } from 'zustand';
-import type { Page, InspectorType, TestCase, Execution, HealingSuggestion, Flow, Fact, DashboardStats } from './types';
+import type { Page, InspectorType, TestCase, Execution, HealingSuggestion, Flow, Fact, DashboardStats, BusinessItemType } from './types';
+
+export type ThemePreset =
+  | 'dark' | 'light'
+  | 'aurora' | 'aurora-light'
+  | 'secure' | 'secure-light'
+  | 'energetic' | 'energetic-light'
+  | 'natural' | 'natural-light';
+
+export type ThemePalette = 'default' | 'aurora' | 'secure' | 'energetic' | 'natural';
+export type ThemeMode = 'dark' | 'light';
+
+export const THEME_PRESETS: ThemePreset[] = [
+  'dark', 'light',
+  'aurora', 'aurora-light',
+  'secure', 'secure-light',
+  'energetic', 'energetic-light',
+  'natural', 'natural-light',
+];
+
+export function themePalette(theme: ThemePreset): ThemePalette {
+  if (theme === 'dark' || theme === 'light') return 'default';
+  return theme.replace('-light', '') as ThemePalette;
+}
+
+export function themeMode(theme: ThemePreset): ThemeMode {
+  return theme === 'light' || theme.endsWith('-light') ? 'light' : 'dark';
+}
+
+export function composeTheme(palette: ThemePalette, mode: ThemeMode): ThemePreset {
+  if (palette === 'default') return mode;
+  return mode === 'light' ? (`${palette}-light` as ThemePreset) : (palette as ThemePreset);
+}
 
 export type ContextCounts = {
   sources: number;
@@ -37,6 +69,14 @@ type AppState = {
   // Navigation
   currentPage: Page;
   setCurrentPage: (page: Page) => void;
+  selectedSyncJobId: string | null;
+  setSelectedSyncJobId: (jobId: string | null) => void;
+  // A category to pre-select when navigating into the Knowledge tab from outside it (e.g. command palette, search results).
+  pendingKnowledgeType: BusinessItemType | null;
+  setPendingKnowledgeType: (type: BusinessItemType | null) => void;
+  // A Framework tab to pre-select when navigating into the Framework page from outside it.
+  pendingFrameworkTab: string | null;
+  setPendingFrameworkTab: (tab: string | null) => void;
 
   // Inspector
   inspectorOpen: boolean;
@@ -52,7 +92,10 @@ type AppState = {
   toggleNode: (id: string) => void;
 
   // Theme
-  theme: 'dark' | 'light';
+  theme: ThemePreset;
+  setTheme: (theme: ThemePreset) => void;
+  setThemePalette: (palette: ThemePalette) => void;
+  setThemeMode: (mode: ThemeMode) => void;
   toggleTheme: () => void;
 
   // Search
@@ -62,6 +105,8 @@ type AppState = {
   // Notifications
   notificationsOpen: boolean;
   setNotificationsOpen: (open: boolean) => void;
+  notificationsUnreadCount: number;
+  setNotificationsUnreadCount: (count: number) => void;
 
   // Copilot
   copilotOpen: boolean;
@@ -82,6 +127,8 @@ type AppState = {
     flows: Flow[];
     facts: Fact[];
   }>) => void;
+  updateTestCase: (testCase: TestCase) => void;
+  updateTestCases: (testCases: TestCase[]) => void;
 
   // Loading
   loading: boolean;
@@ -96,6 +143,12 @@ export const useAppStore = create<AppState>((set) => ({
   // Navigation
   currentPage: 'command-center',
   setCurrentPage: (page) => set({ currentPage: page }),
+  selectedSyncJobId: null,
+  setSelectedSyncJobId: (jobId) => set({ selectedSyncJobId: jobId }),
+  pendingKnowledgeType: null,
+  setPendingKnowledgeType: (type) => set({ pendingKnowledgeType: type }),
+  pendingFrameworkTab: null,
+  setPendingFrameworkTab: (tab) => set({ pendingFrameworkTab: tab }),
 
   // Inspector
   inspectorOpen: false,
@@ -107,7 +160,7 @@ export const useAppStore = create<AppState>((set) => ({
   // Sidebar
   sidebarCollapsed: false,
   toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
-  expandedNodes: new Set(['agents', 'context']),
+  expandedNodes: new Set(['agents', 'plan', 'automate', 'execute', 'review']),
   toggleNode: (id) => set((state) => {
     const newExpanded = new Set(state.expandedNodes);
     if (newExpanded.has(id)) {
@@ -120,11 +173,44 @@ export const useAppStore = create<AppState>((set) => ({
 
   // Theme
   theme: 'dark',
-  toggleTheme: () => set((state) => {
-    const newTheme = state.theme === 'dark' ? 'light' : 'dark';
+  setTheme: (theme) => {
+    if (typeof window !== 'undefined') {
+      try { window.localStorage.setItem('superqa-theme', theme); } catch { /* Keep the in-memory choice if storage is unavailable. */ }
+      document.documentElement.classList.remove(...THEME_PRESETS);
+      document.documentElement.classList.add(theme);
+    }
+    set({ theme });
+  },
+  setThemePalette: (palette) => set((state) => {
+    const newTheme = composeTheme(palette, themeMode(state.theme));
     if (typeof document !== 'undefined') {
-      document.documentElement.classList.remove('dark', 'light');
+      document.documentElement.classList.remove(...THEME_PRESETS);
       document.documentElement.classList.add(newTheme);
+    }
+    if (typeof window !== 'undefined') {
+      try { window.localStorage.setItem('superqa-theme', newTheme); } catch { /* Theme remains active for this session. */ }
+    }
+    return { theme: newTheme };
+  }),
+  setThemeMode: (mode) => set((state) => {
+    const newTheme = composeTheme(themePalette(state.theme), mode);
+    if (typeof document !== 'undefined') {
+      document.documentElement.classList.remove(...THEME_PRESETS);
+      document.documentElement.classList.add(newTheme);
+    }
+    if (typeof window !== 'undefined') {
+      try { window.localStorage.setItem('superqa-theme', newTheme); } catch { /* Theme remains active for this session. */ }
+    }
+    return { theme: newTheme };
+  }),
+  toggleTheme: () => set((state) => {
+    const newTheme = composeTheme(themePalette(state.theme), themeMode(state.theme) === 'dark' ? 'light' : 'dark');
+    if (typeof document !== 'undefined') {
+      document.documentElement.classList.remove(...THEME_PRESETS);
+      document.documentElement.classList.add(newTheme);
+    }
+    if (typeof window !== 'undefined') {
+      try { window.localStorage.setItem('superqa-theme', newTheme); } catch { /* Theme remains active for this session. */ }
     }
     return { theme: newTheme };
   }),
@@ -136,6 +222,8 @@ export const useAppStore = create<AppState>((set) => ({
   // Notifications
   notificationsOpen: false,
   setNotificationsOpen: (open) => set({ notificationsOpen: open }),
+  notificationsUnreadCount: 0,
+  setNotificationsUnreadCount: (count) => set({ notificationsUnreadCount: count }),
 
   // Copilot
   copilotOpen: false,
@@ -149,6 +237,18 @@ export const useAppStore = create<AppState>((set) => ({
   flows: [],
   facts: [],
   setData: (data) => set((state) => ({ ...state, ...data })),
+  updateTestCase: (testCase) => set((state) => ({
+    testCases: state.testCases.map((item) => (item.id === testCase.id ? testCase : item)),
+    inspectorData: state.inspectorType === 'testCase' && (state.inspectorData as TestCase | null)?.id === testCase.id ? testCase : state.inspectorData,
+  })),
+  updateTestCases: (updated) => set((state) => {
+    const byId = new Map(updated.map((testCase) => [testCase.id, testCase]));
+    const inspectorData = state.inspectorType === 'testCase' ? byId.get((state.inspectorData as TestCase | null)?.id || '') : undefined;
+    return {
+      testCases: state.testCases.map((item) => byId.get(item.id) || item),
+      ...(inspectorData ? { inspectorData } : {}),
+    };
+  }),
 
   // Loading
   loading: true,

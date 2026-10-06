@@ -53,6 +53,7 @@ set_from_env "$AGENTS_ENV" QA_WORKFLOW_KEY
 set_from_env "$API_ENV" RECALL_API_KEY
 set_from_env "$API_ENV" RECALL_WEBHOOK_SECRET
 set_from_env "$API_ENV" RECALL_REGION
+set_from_env "$API_ENV" CHAT_SECRET_KEY
 
 # Auto-generate the infra-only secrets if still blank after the env-var pass.
 if [ -z "$(current_value "$ROOT_ENV" DATABASE_PASSWORD)" ]; then
@@ -63,6 +64,11 @@ if [ -z "$(current_value "$ROOT_ENV" NEO4J_PASSWORD)" ]; then
 fi
 if [ -z "$(current_value "$ROOT_ENV" S3_SECRET_KEY)" ]; then
   sed -i "s/^S3_SECRET_KEY=.*/S3_SECRET_KEY=$(openssl rand -hex 24)/" "$ROOT_ENV"
+fi
+# Must be exactly 64 hex chars (32 bytes) — chat.connectors.ts validates this
+# format and throws if it isn't, the moment a Slack/Teams connector is used.
+if [ -z "$(current_value "$API_ENV" CHAT_SECRET_KEY)" ]; then
+  sed -i "s/^CHAT_SECRET_KEY=.*/CHAT_SECRET_KEY=$(openssl rand -hex 32)/" "$API_ENV"
 fi
 
 # Keeps a secret identical in both app env files, auto-generating one if

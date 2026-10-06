@@ -38,10 +38,29 @@ set_from_env() {
   fi
 }
 
+# Same, but only seeds the value the FIRST time (while the file's current
+# value is still blank) — every later call is a no-op even if the env var
+# is set to something different. DATABASE_PASSWORD/NEO4J_PASSWORD/
+# S3_SECRET_KEY get baked into their service's own persistent volume at
+# first init and are never re-read afterward: Postgres and Neo4j both
+# ignore a changed password env var on every later restart. Using
+# set_from_env for these meant a changed GitHub secret silently desynced
+# the app's credential from the one actually stored in the volume on every
+# later deploy — "password authentication failed for user qaagent" and
+# Neo4j crash-looping on auth, both observed in production from exactly
+# this. Once a value exists, keep it; rotate the credential inside the
+# running service itself if it needs to change, not by editing this file.
+set_once_from_env() {
+  local file=$1 key=$2 value="${!2:-}"
+  if [ -n "$value" ] && [ -z "$(current_value "$file" "$key")" ]; then
+    sed -i "s#^${key}=.*#${key}=${value}#" "$file"
+  fi
+}
+
 set_from_env "$ROOT_ENV" DOMAIN
-set_from_env "$ROOT_ENV" DATABASE_PASSWORD
-set_from_env "$ROOT_ENV" NEO4J_PASSWORD
-set_from_env "$ROOT_ENV" S3_SECRET_KEY
+set_once_from_env "$ROOT_ENV" DATABASE_PASSWORD
+set_once_from_env "$ROOT_ENV" NEO4J_PASSWORD
+set_once_from_env "$ROOT_ENV" S3_SECRET_KEY
 set_from_env "$API_ENV" ANTHROPIC_API_KEY
 set_from_env "$API_ENV" OPENAI_API_KEY
 set_from_env "$AGENTS_ENV" ANTHROPIC_API_KEY

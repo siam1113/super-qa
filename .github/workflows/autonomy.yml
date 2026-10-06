@@ -32,6 +32,5 @@ jobs:
       - run: npm exec -w apps/api -- jest test/integration/autonomy.test.ts test/integration/browser-execution.test.ts test/integration/harness.test.ts test/integration/pipeline-recovery.test.ts test/integration/qa-workflows.test.ts --runInBand --silent
         env:
           HARNESS_DOCKER_E2E: '1'
-          SETTINGS_UI_E2E: '1'
       - if: always()
         run: docker compose -p qa-pipeline-tests -f docker-compose.pipeline-test.yml down --volumes

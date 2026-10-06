@@ -17,7 +17,13 @@ type App = {
 type Organization = { id: string; name: string; createdAt: string; appCount: number; memberCount: number; apps: App[] };
 type Service = { id: string; name: string; status: 'healthy' | 'unhealthy'; detail: string; checkedAt: string };
 type StatusPayload = { checkedAt: string; services: Service[]; timeline: Array<{ id: string; service: string; status: string; message: string; startedAt: string; resolvedAt: string | null }> };
-type AdminTab = 'organizations' | 'services';
+type BenchmarkReport = {
+  samples: number; distinctSamples: number; repetitions: number; completed: number; defective: number; healthy: number;
+  detectedDefects: number; falsePasses: number; missedDefects: number; falseFailures: number; abstentions: number;
+  defectRecall: number | null; falseFailureRate: number | null; completionRate: number; gatePassed: boolean; rolloutGatePassed: boolean;
+};
+type AgentHealthEntry = { id: string; projectId: string; projectName: string; name: string; kind: string; status: string; report: BenchmarkReport; createdAt: string };
+type AdminTab = 'organizations' | 'services' | 'agentHealth';
 type OrganizationTab = 'overview' | 'projects' | 'users' | 'services' | 'support' | 'settings';
 type AdminResult = { project?: { name: string }; credential?: { secret: string }; secret?: string; adminEmail?: string; invitation?: { delivery: string; inviteUrl?: string } };
 type InviteResult = { email: string; role: string; delivery: string; inviteUrl?: string; expiresAt: string };
@@ -29,6 +35,7 @@ const panelClass = 'rounded-xl border border-border bg-surface p-5';
 const adminTabs: Array<{ id: AdminTab; label: string; icon: typeof Activity }> = [
   { id: 'organizations', label: 'Organizations', icon: Users },
   { id: 'services', label: 'Services', icon: ShieldCheck },
+  { id: 'agentHealth', label: 'Agent Health', icon: Activity },
 ];
 const organizationTabs: Array<{ id: OrganizationTab; label: string }> = [
   { id: 'overview', label: 'Overview' },
@@ -79,6 +86,9 @@ export function AdminPage() {
   const [authorized, setAuthorized] = useState(false);
   const [busy, setBusy] = useState(false);
   const [refreshingStatus, setRefreshingStatus] = useState(false);
+  const [agentHealth, setAgentHealth] = useState<AgentHealthEntry[] | null>(null);
+  const [agentHealthLoading, setAgentHealthLoading] = useState(false);
+  const [agentHealthError, setAgentHealthError] = useState('');
   const [error, setError] = useState('');
   const [tab, setTab] = useState<AdminTab>('organizations');
   const [organizationTab, setOrganizationTab] = useState<OrganizationTab>('overview');
@@ -128,6 +138,16 @@ export function AdminPage() {
     } finally { setRefreshingStatus(false); }
   }, []);
 
+  const refreshAgentHealth = useCallback(async () => {
+    setAgentHealthLoading(true);
+    try {
+      const list = await superAdminRequest('/benchmarks') as AgentHealthEntry[];
+      setAgentHealth(list); setAgentHealthError('');
+    } catch (failure) {
+      setAgentHealth(null); setAgentHealthError(failure instanceof Error ? failure.message : 'Could not load agent health.');
+    } finally { setAgentHealthLoading(false); }
+  }, []);
+
   useEffect(() => {
     let active = true;
     void (async () => {
@@ -145,6 +165,7 @@ export function AdminPage() {
   }, []);
 
   useEffect(() => { if (tab === 'services' && !status && !refreshingStatus) void refreshStatus(); }, [tab, status, refreshingStatus, refreshStatus]);
+  useEffect(() => { if (tab === 'agentHealth' && !agentHealth && !agentHealthLoading) void refreshAgentHealth(); }, [tab, agentHealth, agentHealthLoading, refreshAgentHealth]);
 
   const selectedOrganization = organizations.find(organization => organization.id === selectedOrganizationId) || null;
   const selectedApp = selectedOrganization?.apps.find(app => app.id === selectedAppId) || null;
@@ -289,6 +310,12 @@ export function AdminPage() {
         </div>}
 
         {tab === 'services' && <section className={panelClass + ' space-y-4'}><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.15em] text-accent-blue">Deployment</p><h2 className="mt-1 text-2xl font-semibold tracking-tight">Service status</h2><p className="mt-1 text-sm text-text-secondary">Live infrastructure checks for the whole deployment.</p></div><button className={quietButtonClass} onClick={() => void refreshStatus()} disabled={refreshingStatus}><RefreshCw size={14} className={refreshingStatus ? 'animate-spin' : ''} />Refresh status</button></div>{statusError && <p role="alert" className="rounded-lg border border-warning/25 bg-warning/10 p-3 text-sm text-warning">{statusError}</p>}{!status && refreshingStatus && <p className="flex items-center gap-2 py-6 text-sm text-text-secondary"><LoaderCircle size={16} className="animate-spin" />Checking services…</p>}{status && <><p className="text-xs text-text-secondary">Last checked {new Date(status.checkedAt).toLocaleString()}</p><div className="divide-y divide-border">{status.services.map(service => <article key={service.id} className="flex flex-wrap items-center justify-between gap-3 py-4"><div className="flex items-center gap-3"><span className={'flex h-9 w-9 items-center justify-center rounded-lg ' + (service.status === 'healthy' ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger')}><Activity size={17} /></span><div><h3 className="text-sm font-medium">{service.name}</h3><p className="mt-1 text-xs text-text-secondary">{service.detail}</p></div></div><StatusPill active={service.status === 'healthy'} activeLabel="Operational" inactiveLabel="Issue detected" /></article>)}</div><div className="border-t border-border pt-4"><h3 className="text-sm font-medium">Recent incidents</h3>{status.timeline.length ? <div className="mt-3 space-y-2">{status.timeline.slice(0, 8).map(incident => <div key={incident.id} className="flex flex-wrap justify-between gap-2 rounded-lg bg-canvas p-3 text-sm"><span>{incident.message}</span><span className="text-xs text-text-secondary">{new Date(incident.startedAt).toLocaleString()} · {incident.resolvedAt ? 'Resolved' : 'Ongoing'}</span></div>)}</div> : <p className="mt-2 text-sm text-text-secondary">No incidents recorded in the last 30 days.</p>}</div></>}</section>}
+        {tab === 'agentHealth' && <section className={panelClass + ' space-y-4'}>
+          <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.15em] text-accent-blue">Deployment</p><h2 className="mt-1 text-2xl font-semibold tracking-tight">Agent health</h2><p className="mt-1 text-sm text-text-secondary">Read-only accuracy of the QA agent against labeled benchmark corpora, across every app. Benchmarks are created and run outside this console.</p></div><button className={quietButtonClass} onClick={() => void refreshAgentHealth()} disabled={agentHealthLoading}><RefreshCw size={14} className={agentHealthLoading ? 'animate-spin' : ''} />Refresh</button></div>
+          {agentHealthError && <p role="alert" className="rounded-lg border border-warning/25 bg-warning/10 p-3 text-sm text-warning">{agentHealthError}</p>}
+          {!agentHealth && agentHealthLoading && <p className="flex items-center gap-2 py-6 text-sm text-text-secondary"><LoaderCircle size={16} className="animate-spin" />Loading agent health…</p>}
+          {agentHealth && (agentHealth.length ? <div className="overflow-x-auto"><table className="w-full min-w-[920px] text-left text-sm"><thead className="text-xs text-text-secondary"><tr><th className="py-2 font-medium">App</th><th className="py-2 font-medium">Benchmark</th><th className="py-2 font-medium">Status</th><th className="py-2 font-medium">Completed</th><th className="py-2 font-medium">Defects detected</th><th className="py-2 font-medium">False passes</th><th className="py-2 font-medium">False failures</th><th className="py-2 font-medium">Gate</th><th className="py-2 font-medium">Created</th></tr></thead><tbody className="divide-y divide-border">{agentHealth.map(entry => <tr key={entry.id}><td className="py-3"><p className="font-medium">{entry.projectName}</p></td><td className="py-3"><p>{entry.name}</p><p className="text-xs capitalize text-text-secondary">{entry.kind.replace('_', ' ')}</p></td><td className="py-3 capitalize">{entry.status}</td><td className="py-3">{entry.report.completed}/{entry.report.samples}</td><td className="py-3">{entry.report.detectedDefects}/{entry.report.defective}</td><td className={'py-3' + (entry.report.falsePasses ? ' text-danger font-medium' : '')}>{entry.report.falsePasses}</td><td className={'py-3' + (entry.report.falseFailures ? ' text-warning font-medium' : '')}>{entry.report.falseFailures}</td><td className="py-3"><StatusPill active={entry.report.gatePassed} activeLabel="Passed" inactiveLabel="Not passed" /></td><td className="py-3 text-xs text-text-secondary">{new Date(entry.createdAt).toLocaleDateString()}</td></tr>)}</tbody></table></div> : <p className="rounded-lg bg-canvas p-5 text-sm text-text-secondary">No benchmarks recorded yet.</p>)}
+        </section>}
 
       </section>
       <footer className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4 text-xs text-text-secondary"><span>App admins invite teammates from Settings → Access.</span><span>Super-admin accounts are provisioned on the API host.</span><a className="underline" href="/settings">Open settings</a></footer>

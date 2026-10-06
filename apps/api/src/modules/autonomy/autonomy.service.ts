@@ -526,6 +526,20 @@ export class AutonomyService {
     return this.scoped(identity, ['owner', 'admin', 'member', 'ci'], async (manager, project) => this.benchmarkView(manager, await this.ownedBenchmark(manager, project.id, id)));
   }
 
+  // Platform-wide, super-admin-only view of agent accuracy across every app's benchmarks —
+  // unlike benchmarks()/benchmark() above, this isn't scoped to one project's credential.
+  async agentHealth() {
+    const benchmarks = await this.database.manager.find(QaBenchmark, { order: { createdAt: 'DESC' }, take: 50 });
+    if (!benchmarks.length) return [];
+    const projectIds = [...new Set(benchmarks.map(benchmark => benchmark.projectId))];
+    const projects = await this.database.manager.find(QaProject, { where: { id: In(projectIds) }, select: { id: true, name: true } });
+    const projectNames = new Map(projects.map(project => [project.id, project.name]));
+    return Promise.all(benchmarks.map(async benchmark => {
+      const { status, report } = await this.benchmarkView(this.database.manager, benchmark);
+      return { id: benchmark.id, projectId: benchmark.projectId, projectName: projectNames.get(benchmark.projectId) || 'Unknown app', name: benchmark.corpus.name, kind: benchmark.corpus.kind, status, report, createdAt: benchmark.createdAt };
+    }));
+  }
+
   async benchmarkAction(identity: ProjectKey, id: string, action: 'approve' | 'resume' | 'pause' | 'advance') {
     return this.scoped(identity, action === 'approve' ? ['owner'] : ['owner', 'admin', 'ci'], async (manager, project, key) => {
       const benchmark = await this.ownedBenchmark(manager, project.id, id);

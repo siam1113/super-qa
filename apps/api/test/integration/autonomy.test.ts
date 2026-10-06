@@ -169,6 +169,10 @@ describe('project autonomy control plane', () => {
     expect((await post(`/benchmarks/${benchmark.id}/advance`).send({}).expect(201)).body.trials.map(item => item.run.id)).toEqual(report.trials.map(item => item.run.id));
     expect((await get('').expect(200)).body.runs).toHaveLength(2);
     expect(JSON.stringify(report)).not.toContain('token');
+    const agentHealth = (await request(app.getHttpServer()).get('/api/auth/super-admin/benchmarks').set('Cookie', superAdminCookie).expect(200)).body;
+    const entry = agentHealth.find((item: { id: string }) => item.id === benchmark.id);
+    expect(entry).toMatchObject({ projectName: 'Pilot', name: 'UI cohort', status: 'completed', report: { gatePassed: true } });
+    await request(app.getHttpServer()).get('/api/auth/super-admin/benchmarks').expect(401);
   });
 
   it('fences benchmark roles, scope, quota and paused collection while preserving uncertain evidence', async () => {

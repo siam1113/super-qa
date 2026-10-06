@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 
 async function forward(request: NextRequest, context: { params: { path?: string[] } }) {
   const path = '/' + (context.params.path || []).join('/');
-  const allowed = /^\/(?:config|login|session|logout|select-app|end-impersonation|accept-invitation|invitations(?:\/[a-f0-9-]+\/revoke)?|members(?:\/[a-f0-9-]+\/revoke)?|oidc\/(?:start|callback)|organization-admin(?:\/apps(?:\/[a-f0-9-]+\/(?:settings|invitations))?)?|super-admin\/organizations(?:\/[a-f0-9-]+\/(?:recover-owner|support-settings|invitations|members\/[a-f0-9-]+\/impersonate|apps(?:\/[a-f0-9-]+\/(?:settings|invitations))?))?)$/i;
+  const allowed = /^\/(?:config|login|session|logout|select-app|end-impersonation|accept-invitation|invitations(?:\/[a-f0-9-]+\/revoke)?|members(?:\/[a-f0-9-]+\/revoke)?|oidc\/(?:start|callback)|organization-admin(?:\/apps(?:\/[a-f0-9-]+\/(?:settings|invitations))?)?|super-admin\/benchmarks|super-admin\/organizations(?:\/[a-f0-9-]+\/(?:recover-owner|support-settings|invitations|members\/[a-f0-9-]+\/impersonate|apps(?:\/[a-f0-9-]+\/(?:settings|invitations))?))?)$/i;
   const methodAllowed = ['GET', 'POST'].includes(request.method) || (request.method === 'PATCH' && /^\/(?:organization-admin\/apps\/[a-f0-9-]+\/settings|super-admin\/organizations\/[a-f0-9-]+\/apps\/[a-f0-9-]+\/settings)$/i.test(path));
   const headers = { 'Cache-Control': 'no-store, private', Vary: 'Cookie, Authorization' };
   if (!allowed.test(path) || !methodAllowed) return NextResponse.json({ message: 'Unsupported auth route' }, { status: 404, headers });

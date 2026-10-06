@@ -81,6 +81,9 @@ export class AuthController {
   @Get('super-admin/organizations') @UseGuards(SuperAdminGuard)
   organizations() { return this.autonomy.organizationList(); }
 
+  @Get('super-admin/benchmarks') @UseGuards(SuperAdminGuard)
+  agentHealth() { return this.autonomy.agentHealth(); }
+
   @Post('super-admin/organizations') @UseGuards(SuperAdminGuard)
   createOrganization(@Body() input: CreateOrganizationDto) { return this.autonomy.enroll(input); }
 

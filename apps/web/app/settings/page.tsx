@@ -1,5 +1,5 @@
-import { AppShell } from '@/components/AppShell';
+import { SettingsPage } from '@/components/pages/Settings';
 
 export default function SettingsRoute() {
-  return <AppShell initialPage="settings" />;
+  return <SettingsPage />;
 }

@@ -9,7 +9,6 @@ Welcome to the Ultimate QA Agent documentation. This folder contains comprehensi
 - [Conversational agent platform plan](./conversational-agent-platform-plan.md): phased design for native chat, Slack/Teams integrations, meetings, voice, and parallel agent work.
 - [Chat and text integrations](./chat-and-text-integrations.md): native personal/group chats, named agents, scoped tasks, Slack/Teams bot setup, response/delivery behavior and verification.
 - [Meetings](./meetings.md): native video-call pilot, note-taking/active modes, Teams/Meet adapter, consent, deployment and remaining provider/voice gates.
-- [Calendar invitations and auto-join](./calendar-auto-join.md): Google/Microsoft mailbox authorization, scheduled joins, cancellations, Calendar/Meetings views and deployment setup.
 - [Live meeting voice](./live-meeting-voice.md): GPT-Live participation, native audio relay, Teams/Meet media bridge, security controls and real-provider rollout gates.
 - [Native call verification](./native-call-verification.md): audio fixes, speaking indicators, compact lobby, automatic final notes, browser regression coverage, and a real GPT-Live call result.
 - [Platform audit](./platform-audit.md): implementation findings, priorities, premature scope and missing foundations.

@@ -152,10 +152,14 @@ to hand-edit a `.env` file, ever (not even for the first boot in step 5):
 - `DOMAIN`
 - `ANTHROPIC_API_KEY` and/or `OPENAI_API_KEY`
 - `DATABASE_PASSWORD`, `NEO4J_PASSWORD`, `S3_SECRET_KEY`,
-  `AGENT_MEMORY_SIGNING_KEY` — optional; leave unset and
+  `AGENT_MEMORY_SIGNING_KEY`, `QA_WORKFLOW_KEY` — optional; leave unset and
   `bootstrap-env.sh` auto-generates these with `openssl rand` on first run
   instead. Only worth setting explicitly if you want the value recorded in
   GitHub rather than only living on the server.
+- `RECALL_API_KEY`, `RECALL_WEBHOOK_SECRET`, `RECALL_REGION` — optional,
+  for the Teams/Google Meet auto-join feature (`MEETING_PUBLIC_API_URL` is
+  *not* one of these — it's derived from `DOMAIN` automatically by
+  `docker-compose.prod.yml`, never set it by hand).
 
 Any of these left unset simply falls back to whatever's already on the
 server, or to auto-generation for the random-secret ones.

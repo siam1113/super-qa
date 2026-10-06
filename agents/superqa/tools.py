@@ -41,7 +41,7 @@ async def delegate_qa_skill(agent_type: Literal["qae", "aue"], skill_name: str, 
     state = {"messages": [], "agent_type": agent_type, "skill_request": request.model_dump(mode="json")}
     try:
         writer = get_stream_writer()
-    except RuntimeError:
+    except (RuntimeError, KeyError):
         def writer(_chunk):
             return None
     async for mode, chunk in expert.astream(state, stream_mode=["updates", "custom"]):

@@ -48,6 +48,11 @@ set_from_env "$AGENTS_ENV" ANTHROPIC_API_KEY
 set_from_env "$AGENTS_ENV" OPENAI_API_KEY
 set_from_env "$API_ENV" AGENT_MEMORY_SIGNING_KEY
 set_from_env "$AGENTS_ENV" AGENT_MEMORY_SIGNING_KEY
+set_from_env "$API_ENV" QA_WORKFLOW_KEY
+set_from_env "$AGENTS_ENV" QA_WORKFLOW_KEY
+set_from_env "$API_ENV" RECALL_API_KEY
+set_from_env "$API_ENV" RECALL_WEBHOOK_SECRET
+set_from_env "$API_ENV" RECALL_REGION
 
 # Auto-generate the infra-only secrets if still blank after the env-var pass.
 if [ -z "$(current_value "$ROOT_ENV" DATABASE_PASSWORD)" ]; then
@@ -60,19 +65,26 @@ if [ -z "$(current_value "$ROOT_ENV" S3_SECRET_KEY)" ]; then
   sed -i "s/^S3_SECRET_KEY=.*/S3_SECRET_KEY=$(openssl rand -hex 24)/" "$ROOT_ENV"
 fi
 
-# Keep AGENT_MEMORY_SIGNING_KEY identical in both files when auto-generating.
-if [ -z "$(current_value "$API_ENV" AGENT_MEMORY_SIGNING_KEY)" ] || \
-   [ -z "$(current_value "$AGENTS_ENV" AGENT_MEMORY_SIGNING_KEY)" ]; then
-  signing_key="$(current_value "$API_ENV" AGENT_MEMORY_SIGNING_KEY)"
-  if [ -z "$signing_key" ]; then
-    signing_key="$(current_value "$AGENTS_ENV" AGENT_MEMORY_SIGNING_KEY)"
+# Keeps a secret identical in both app env files, auto-generating one if
+# neither file has it yet. Used for the two keys api and agents must agree
+# on: AGENT_MEMORY_SIGNING_KEY and QA_WORKFLOW_KEY.
+sync_shared_secret() {
+  local key=$1 bytes=$2 value
+  if [ -z "$(current_value "$API_ENV" "$key")" ] || [ -z "$(current_value "$AGENTS_ENV" "$key")" ]; then
+    value="$(current_value "$API_ENV" "$key")"
+    if [ -z "$value" ]; then
+      value="$(current_value "$AGENTS_ENV" "$key")"
+    fi
+    if [ -z "$value" ]; then
+      value="$(openssl rand -hex "$bytes")"
+    fi
+    sed -i "s/^${key}=.*/${key}=${value}/" "$API_ENV"
+    sed -i "s/^${key}=.*/${key}=${value}/" "$AGENTS_ENV"
   fi
-  if [ -z "$signing_key" ]; then
-    signing_key="$(openssl rand -hex 32)"
-  fi
-  sed -i "s/^AGENT_MEMORY_SIGNING_KEY=.*/AGENT_MEMORY_SIGNING_KEY=$signing_key/" "$API_ENV"
-  sed -i "s/^AGENT_MEMORY_SIGNING_KEY=.*/AGENT_MEMORY_SIGNING_KEY=$signing_key/" "$AGENTS_ENV"
-fi
+}
+
+sync_shared_secret AGENT_MEMORY_SIGNING_KEY 32
+sync_shared_secret QA_WORKFLOW_KEY 32
 
 # Can't invent these — stop and ask, rather than booting a broken stack.
 missing=()

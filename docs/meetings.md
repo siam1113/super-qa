@@ -54,11 +54,11 @@ Open an organization conversation, then **Calls & meetings**. An Owner or Admin 
 - **Approve & publish notes** creates one idempotent conversation message. The first suggested action becomes an ordinary reviewed chat-task proposal; all other proposals remain visible in the notes. A further explicit task confirmation is required. No QA execution or organization knowledge-base update occurs automatically.
 - Runs are durable queued/running/done/failed records with input evidence IDs, provider usage and policy versions. Model calls have no automatic retries, a 30-second timeout and 2,400 output-token cap. Stop, membership changes and conversation-policy changes fence late replies. Interrupted runs fail visibly instead of spending again.
 - Pilot limits are 1,000 meetings and 100 reasoning runs per project per rolling day, 1,000 transcript entries per meeting, and 200 entries/40,000 transcript characters per model run. The meeting quota is currently a shared hardcoded value for all projects. Oversized transcripts fail explicitly rather than silently dropping earlier discussion. Hierarchical summarization and larger-scale concurrency are future work.
-- Notes are compiled on request, including after ending the call. Calendar-scheduled meetings also enqueue one final notes run after a normal end; cancelled/skipped meetings do not. See [calendar-auto-join.md](calendar-auto-join.md) for authorization, transcript availability and failure semantics. Meeting tasks and context require human review.
+- Notes are compiled on request, including after ending the call. Meeting tasks and context require human review.
 
 ### Teams and Google Meet
 
-For invitation-driven joining, connect the dedicated QAE/AUE mailbox through the new **Calendar** view. Scheduled invitations, title/time/invitee metadata, default participation mode and **Meetings** history are implemented separately from Teams chat installation. Setup, supported scopes and limitations: [Calendar invitation auto-join](calendar-auto-join.md).
+A meeting URL shared directly in chat (e.g. "@QAE join this call <link>") triggers dispatch — see `detectMeetingLink`/`scanMeetingLinks` in `meeting.provider.ts`. (Calendar-mailbox-driven auto-join — connecting a dedicated mailbox so invitations dispatch without a shared link — was removed; see `apps/api/migrations/20261114-remove-calendar-mailbox.sql`.)
 
 The optional adapter creates a Recall bot with the chosen QAE/AUE name, AI disclosure, real-time transcript callbacks, no mixed-video artifact, five-minute lobby limit, and one-hour recording limit. It does not reuse Teams text-bot credentials or the user's browser login. Hosts must admit the bot and provider/tenant policies still apply.
 

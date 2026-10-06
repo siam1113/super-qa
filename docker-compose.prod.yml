@@ -85,6 +85,8 @@ services:
       S3_SECRET_KEY: ${S3_SECRET_KEY}
       AGENTS_API_URL: http://agents:8000
       AUTH_PUBLIC_URL: https://${DOMAIN}
+      API_URL: https://${DOMAIN}
+      MEETING_PUBLIC_API_URL: https://${DOMAIN}
       AUTONOMY_LOCKDOWN: "true"
       AUTONOMY_ALLOWED_ORIGINS: '["https://${DOMAIN}"]'
     depends_on:

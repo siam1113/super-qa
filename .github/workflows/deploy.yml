@@ -31,11 +31,15 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           AGENT_MEMORY_SIGNING_KEY: ${{ secrets.AGENT_MEMORY_SIGNING_KEY }}
+          QA_WORKFLOW_KEY: ${{ secrets.QA_WORKFLOW_KEY }}
+          RECALL_API_KEY: ${{ secrets.RECALL_API_KEY }}
+          RECALL_WEBHOOK_SECRET: ${{ secrets.RECALL_WEBHOOK_SECRET }}
+          RECALL_REGION: ${{ secrets.RECALL_REGION }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          envs: DOMAIN,DATABASE_PASSWORD,NEO4J_PASSWORD,S3_SECRET_KEY,ANTHROPIC_API_KEY,OPENAI_API_KEY,AGENT_MEMORY_SIGNING_KEY
+          envs: DOMAIN,DATABASE_PASSWORD,NEO4J_PASSWORD,S3_SECRET_KEY,ANTHROPIC_API_KEY,OPENAI_API_KEY,AGENT_MEMORY_SIGNING_KEY,QA_WORKFLOW_KEY,RECALL_API_KEY,RECALL_WEBHOOK_SECRET,RECALL_REGION
           script: |
             set -e
             cd /opt/ultimate-qa-agent

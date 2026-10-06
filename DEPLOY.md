@@ -87,31 +87,16 @@ Caddy requests its TLS certificate automatically once DNS resolves and ports
 80/443 are reachable — give it a minute on first boot. Open your firewall
 for 80 and 443 if you have one (e.g. `ufw allow 80,443/tcp`).
 
-**Known gap — `apps/api/migrations/*.sql` are incremental (`ALTER TABLE`/
-`ADD COLUMN IF NOT EXISTS`), not a baseline schema.** They assume the base
-tables already exist, which until now only ever happened via TypeORM's dev-
-mode `synchronize: true`. On a genuinely empty Postgres volume the very
-first migration fails (`relation "sync_jobs" does not exist`), which aborts
-`run-migrations.sh` entirely — every table ends up missing and `api` won't
-start. If this happens (check with `docker compose -f docker-compose.prod.yml
-logs postgres | grep ERROR`), bootstrap the baseline once:
-
-```bash
-docker compose -f docker-compose.prod.yml stop api
-docker compose -f docker-compose.prod.yml run --rm -d --name sync-bootstrap -e NODE_ENV=development api node apps/api/dist/main.js
-# wait for "API running on http://localhost:4000" in: docker logs sync-bootstrap
-docker stop sync-bootstrap
-docker compose -f docker-compose.prod.yml exec -T postgres sh -c \
-  'for f in /migrations/*.sql; do psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -f "$f"; done'
-docker compose -f docker-compose.prod.yml up -d api
-```
-
-This runs the API once with TypeORM synchronize enabled (safe — only to
-create tables matching current entities, not for ongoing use), then applies
-the migrations on top for anything synchronize doesn't cover (tables with no
-`@Entity()` class, e.g. `qa_service_status_incidents`), then restarts
-normally. A proper baseline migration would remove the need for this
-entirely — worth doing before this is relied on for real data.
+`apps/api/migrations/00000000-baseline.sql` runs first (its `00000000`
+prefix sorts before every other migration's date) and creates every
+TypeORM-entity-backed table from scratch, so a genuinely empty Postgres
+volume no longer needs `synchronize` at all — the rest of
+`apps/api/migrations/*.sql` are incremental (`ALTER TABLE`/`ADD COLUMN IF
+NOT EXISTS`) on top of that baseline, same as always. If `api` still won't
+start on a fresh volume, check
+`docker compose -f docker-compose.prod.yml logs postgres | grep ERROR` for
+the actual migration failure — it's no longer the missing-baseline gap this
+section used to describe.
 
 Check everything is healthy:
 

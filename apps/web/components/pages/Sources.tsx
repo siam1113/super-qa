@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { SyncModal, type SyncConfig } from '../sync';
 
-const API_BASE = 'http://localhost:4000';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 const availableIntegrations = [
   { type: 'github', name: 'GitHub', description: 'Connect repositories and PRs', color: 'bg-gray-800', supportsOAuth: true },

@@ -21,7 +21,7 @@ import {
   MessageSquare,
 } from 'lucide-react';
 
-const API_BASE = 'http://localhost:4000';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 const PRIORITY_OPTIONS: { value: TaskPriority; label: string; icon: React.ReactNode; color: string }[] = [
   { value: 'urgent', label: 'Urgent', icon: <AlertTriangle size={14} />, color: 'text-danger' },

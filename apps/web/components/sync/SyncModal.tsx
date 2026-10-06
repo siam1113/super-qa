@@ -116,7 +116,7 @@ export default function SyncModal({
     });
 
     try {
-      const API_BASE = 'http://localhost:4000';
+      const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
       const url = `${API_BASE}/api/sources/${sourceId}/preview-documents?limit=500`;
       console.log('Fetching documents from source:', url);
 

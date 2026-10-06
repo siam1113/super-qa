@@ -17,7 +17,7 @@ import {
   PhoneCall,
 } from 'lucide-react';
 
-const API_BASE = 'http://localhost:4000';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 const SUGGESTIONS = [
   { label: 'Show platform stats', prompt: 'Show me the platform statistics' },

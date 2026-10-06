@@ -6,7 +6,7 @@ import type { Source, SyncJob } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { SyncJobsPage } from './SyncJobs';
 
-const API_BASE = 'http://localhost:4000';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 type PipelineTab = 'jobs' | 'sources' | 'stats';
 type SyncedDocument = { id?: string; externalId: string; type: string; title: string; url?: string; updatedAt?: string };
 type SourceTab = 'jobs' | 'content' | 'activity';

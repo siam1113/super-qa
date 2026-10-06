@@ -59,7 +59,7 @@ import { MeetingDetailsModal, dateTime, durationLabel } from './MeetingHistory';
 import { MarkdownOutput, ToolCallDisplay } from '@/components/chat/MarkdownOutput';
 import { LiveExecutionViewer } from '@/components/execution/LiveExecutionViewer';
 
-const API_BASE = 'http://localhost:4000';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 function isMemoryExpired(memory: AgentMemory) {
   return Boolean(memory.expiresAt && new Date(memory.expiresAt).getTime() <= Date.now());

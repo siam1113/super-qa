@@ -1,5 +1,6 @@
 """Deterministic live exploration over the shared agent-browser MCP adapter."""
 import asyncio
+import base64
 import hashlib
 import ipaddress
 import json
@@ -147,12 +148,12 @@ async def explore_live(value, target, request_id, session_factory=browser_sessio
     queued, visited = set(), set()
     filled_values = [step.value for step in value.actions if step.value]
 
-    # No screenshot/image capability exists in agent-browser's exposed operation
-    # set (BROWSER_BINDINGS) — this is a text-only live view: each visited page
-    # becomes a pseudo "step" (reusing LiveStepState's shape so the existing
-    # useLiveExecution hook/WebSocket needs no changes) with the accessibility
-    # snapshot excerpt as its "result", not a frame. live.create's own
-    # subscriber fan-out means a viewer can connect anytime from here on.
+    # Each visited page becomes a pseudo "step" (reusing LiveStepState's shape so
+    # the existing useLiveExecution hook/WebSocket needs no changes) with the
+    # accessibility snapshot excerpt as its "result", plus a best-effort
+    # screenshot frame so a viewer sees the actual rendered page, not just text.
+    # live.create's own subscriber fan-out means a viewer can connect anytime
+    # from here on.
     live = get_live_registry()
     live.create(request_id, request_id, f"Exploring {target.base_url}")
 
@@ -166,14 +167,36 @@ async def explore_live(value, target, request_id, session_factory=browser_sessio
             "actualResult": redact(page["snapshot"][:500], filled_values), "actions": [], "durationMs": 0, "errorMessage": None,
         } for index, page in enumerate(report["pages"])]})
 
+    async def publish_frame(browser):
+        # Screenshots are view-only streaming to live subscribers, never part of
+        # the persisted report — the saved file is removed right after reading.
+        try:
+            shot = await browser.call("screenshot", format="jpeg", quality=50, fullPage=False)
+        except (BrowserFailure, BrowserBudget):
+            return
+        path = shot.get("path") if isinstance(shot, dict) else None
+        if not isinstance(path, str):
+            return
+        try:
+            with open(path, "rb") as file:
+                data = file.read()
+        except OSError:
+            return
+        finally:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+        live.publish(request_id, {"type": "frame", "dataUrl": "data:image/jpeg;base64," + base64.b64encode(data).decode()})
+
     try:
-        await explore_live_session(value, target, start, report, queue, queued, visited, filled_values, session_factory, publish_steps)
+        await explore_live_session(value, target, start, report, queue, queued, visited, filled_values, session_factory, publish_steps, publish_frame)
     finally:
         live.complete(request_id, "completed")
     return report
 
 
-async def explore_live_session(value, target, start, report, queue, queued, visited, filled_values, session_factory, publish_steps):
+async def explore_live_session(value, target, start, report, queue, queued, visited, filled_values, session_factory, publish_steps, publish_frame):
     output_size = 0
     async with session_factory(target.allowed_domains, value.max_commands) as browser:
         async def observe(depth):
@@ -199,6 +222,7 @@ async def explore_live_session(value, target, start, report, queue, queued, visi
             report["pages"].append(page)
             visited.add(url)
             publish_steps()
+            await publish_frame(browser)
             output_size += len(json.dumps(page).encode())
             if output_size > 250000:
                 raise BrowserBudget("output_budget")

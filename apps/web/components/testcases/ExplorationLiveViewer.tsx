@@ -15,15 +15,20 @@ export function ExplorationLiveViewer({ runId }: { runId: string }) {
         {live.connection === 'closed' && 'Reconnecting…'}
         {live.connection === 'not-found' && 'Exploration finished; designing test cases…'}
       </div>
-      <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto">
-        {live.steps.length === 0 && (
-          <p className="flex items-center gap-2 text-xs text-text-secondary"><Loader2 size={12} className="animate-spin" />Waiting for the first page…</p>
+
+      <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-lg bg-black/85">
+        {live.latestFrame ? (
+          <img src={live.latestFrame} alt="Live browser view" className="max-h-full max-w-full object-contain" />
+        ) : (
+          <p className="flex items-center gap-2 text-xs text-white/60"><Loader2 size={12} className="animate-spin" />Waiting for the first page…</p>
         )}
+      </div>
+
+      <div className="mt-2 max-h-24 flex-none space-y-1 overflow-y-auto">
         {live.steps.map(step => (
-          <div key={step.stepId} className="rounded-lg border border-border bg-elevated/40 px-2.5 py-1.5 text-left text-xs">
-            <p className="truncate font-medium text-text-primary">{step.stepNumber}. {step.description}</p>
-            {step.actualResult && <p className="mt-0.5 line-clamp-2 text-[11px] text-text-secondary">{step.actualResult}</p>}
-          </div>
+          <p key={step.stepId} className="truncate text-left text-[11px] text-text-secondary">
+            {step.stepNumber}. {step.description}
+          </p>
         ))}
       </div>
     </div>

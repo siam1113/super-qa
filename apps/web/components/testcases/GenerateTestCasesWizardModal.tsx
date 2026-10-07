@@ -359,7 +359,7 @@ export function GenerateTestCasesWizardModal({
                 {method === 'exploration' && explorationRunId ? (
                   <>
                     <p className="text-sm font-medium">QAE is exploring the app…</p>
-                    <div className="max-h-72 w-full max-w-md">
+                    <div className="h-[26rem] w-full max-w-lg">
                       <ExplorationLiveViewer runId={explorationRunId}/>
                     </div>
                   </>

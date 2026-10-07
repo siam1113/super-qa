@@ -39,6 +39,7 @@ BROWSER_BINDINGS = {
     "hover": ("browser_hover", "Hover over an identified control."),
     "wait_for_selector": ("browser_wait_for_element", "Wait for an identified element within the browser timeout."),
     "errors": ("browser_read_errors", "Read browser error observations."),
+    "screenshot": ("browser_screenshot", "Capture a screenshot of the current page for a live viewer."),
     "auth_login": ("browser_login", "Use the target's configured authentication profile."),
     "close": ("browser_close", "Close the workflow's private browser session."),
 }

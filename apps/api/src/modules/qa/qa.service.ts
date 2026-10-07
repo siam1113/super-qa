@@ -478,10 +478,25 @@ export class QaService {
       // start_path is validated strictly by explore_app's own ExploreInput contract;
       // an invalid value just fails that one run, degrading to null below like any
       // other exploration failure, rather than rejecting the whole request here.
+      // canExecute must be true: explore_app's effect is "browser_exploration",
+      // which SkillRuntime.run() gates behind current_scope().can_execute before
+      // the graph even starts — with false this always fails immediately with
+      // "This app assignment cannot start execution or external writes", so
+      // exploration never actually runs (verified locally: can_execute=false
+      // 422s every time; true runs the real crawl).
       const result = await this.agentsService.runWorkflowSkill('qae', 'explore_app',
         { url: environment.baseUrl, start_path: startPath || undefined },
-        explorationRunId || randomUUID(), 'local', false);
-      return result.summary || null;
+        explorationRunId || randomUUID(), 'local', true);
+      // result.summary is always a fixed placeholder ("Workflow artifact produced;
+      // inspect its data for QA outcomes") on success — never a real description —
+      // so the actual findings have to be built from result.data.pages ourselves.
+      const pages = (result.data as { pages?: unknown })?.pages;
+      if (!Array.isArray(pages) || pages.length === 0) return null;
+      return pages.map((page, index) => {
+        const url = typeof page?.url === 'string' ? page.url : '(unknown URL)';
+        const snapshot = typeof page?.snapshot === 'string' ? page.snapshot.slice(0, 1000) : '';
+        return `Page ${index + 1}: ${url}\n${snapshot}`;
+      }).join('\n\n').slice(0, 8000);
     } catch (error) {
       this.logger.warn(`Exploration failed, falling back to catalogued coverage only: ${error.message}`);
       return null;

@@ -9,6 +9,7 @@ import {
 import { cn, getPriorityColor, getRiskColor } from '@/lib/utils';
 import type { Environment, TestCase } from '@/lib/types';
 import { RunsPanel, useUnreviewedRunCount } from './RunsPanel';
+import { ExplorationLiveViewer } from './ExplorationLiveViewer';
 
 const ROOT = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -52,6 +53,7 @@ export function GenerateTestCasesWizardModal({
   const [environmentsLoading, setEnvironmentsLoading] = useState(false);
   const [environmentsError, setEnvironmentsError] = useState('');
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<string | null>(null);
+  const [explorationRunId, setExplorationRunId] = useState<string | null>(null);
 
   const [generateError, setGenerateError] = useState('');
   const [proposals, setProposals] = useState<Proposal[] | null>(null);
@@ -101,23 +103,27 @@ export function GenerateTestCasesWizardModal({
   }, [selectedSourceId]);
 
   const chooseMethod = (value: Method) => { setMethod(value); setPhase('configure'); };
-  const backToChoose = () => { setMethod(null); setPhase('choose'); setSelectedSourceId(null); setSelectedTicket(null); setSelectedEnvironmentId(null); setGenerateError(''); };
-  const backToConfigure = () => { setPhase('configure'); setGenerateError(''); setProposals(null); };
+  const backToChoose = () => { setMethod(null); setPhase('choose'); setSelectedSourceId(null); setSelectedTicket(null); setSelectedEnvironmentId(null); setExplorationRunId(null); setGenerateError(''); };
+  const backToConfigure = () => { setPhase('configure'); setGenerateError(''); setProposals(null); setExplorationRunId(null); };
 
-  const buildRequestBody = () => method === 'instruction'
+  const buildRequestBody = (runId?: string) => method === 'instruction'
     ? { mode: 'instruction', instructions: instructions.trim(), count }
     : method === 'ticket'
       ? { mode: 'ticket', documentId: selectedTicket?.id, count }
-      : { mode: 'exploration', count, environmentId: selectedEnvironmentId || undefined };
+      : { mode: 'exploration', count, environmentId: selectedEnvironmentId || undefined, explorationRunId: runId };
 
   const generate = async () => {
     setGenerateError('');
     setPhase('generating');
+    // Generated up front (not read back from state) so the live viewer can open
+    // its websocket using the same id passed to this request's explore_app run.
+    const runId = method === 'exploration' ? crypto.randomUUID() : undefined;
+    setExplorationRunId(runId || null);
     try {
       const response = await fetch(`${ROOT}/api/qa/test-cases/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildRequestBody()),
+        body: JSON.stringify(buildRequestBody(runId)),
       });
       const data = await readJson(response);
       if (!response.ok) throw new Error(data.message || 'QAE could not generate test cases');
@@ -350,8 +356,19 @@ export function GenerateTestCasesWizardModal({
 
             {phase === 'generating' && (
               <div className="motion-safe:animate-fade-in flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
-                <Loader2 size={28} className="animate-spin text-accent-purple"/>
-                <p className="text-sm font-medium">QAE is designing test cases…</p>
+                {method === 'exploration' && explorationRunId ? (
+                  <>
+                    <p className="text-sm font-medium">QAE is exploring the app…</p>
+                    <div className="max-h-72 w-full max-w-md">
+                      <ExplorationLiveViewer runId={explorationRunId}/>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <Loader2 size={28} className="animate-spin text-accent-purple"/>
+                    <p className="text-sm font-medium">QAE is designing test cases…</p>
+                  </>
+                )}
               </div>
             )}
 

@@ -40,6 +40,9 @@ export class GenerateQaCasesDto {
   // Exploration mode only: drives a real explore_app run against this
   // environment's baseUrl instead of just summarizing catalogued coverage.
   @IsOptional() @IsUUID() environmentId?: string;
+  // Client-generated id so the wizard can open its live-exploration viewer
+  // before this request resolves; becomes the agents runtime's live run id.
+  @IsOptional() @IsUUID() explorationRunId?: string;
 }
 
 export class RefineQaCaseDto {

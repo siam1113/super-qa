@@ -427,7 +427,7 @@ export class QaService {
       const coverageContext = coverage.length
         ? `Known flows and how many test cases currently cover each (lowest coverage first):\n${coverage.map(item => `- ${item.name}: ${item.cases} case(s)`).join('\n')}`
         : 'No flows have been catalogued yet for this platform; propose cases for common, high-value areas of a typical web application.';
-      const explored = dto.environmentId ? await this.exploreEnvironment(dto.environmentId) : null;
+      const explored = dto.environmentId ? await this.exploreEnvironment(dto.environmentId, dto.explorationRunId) : null;
       if (explored) {
         framing = 'You just explored the live application below. Use what you actually observed to find the biggest coverage gaps against the catalogued test cases, then design cases that close them.';
         context = `What exploring the live app found:\n${explored}\n\n${coverageContext}`;
@@ -457,14 +457,16 @@ export class QaService {
   // on any failure — missing/misconfigured environment, agents runtime
   // unreachable, QA_WORKFLOW_KEY unset — so generation still falls back to
   // the DB-only context rather than failing the whole request outright.
-  private async exploreEnvironment(environmentId: string): Promise<string | null> {
+  private async exploreEnvironment(environmentId: string, explorationRunId?: string): Promise<string | null> {
     try {
       const environment = await this.database.getRepository(Environment).findOneBy({ id: environmentId });
       if (!environment?.baseUrl) {
         this.logger.warn(`Exploration skipped: environment ${environmentId} has no baseUrl configured`);
         return null;
       }
-      const result = await this.agentsService.runWorkflowSkill('qae', 'explore_app', { url: environment.baseUrl }, randomUUID(), 'local', false);
+      // Use the wizard's pre-generated id as the agents runtime's live run id so its
+      // viewer (already connected via useLiveExecution) receives this run's steps.
+      const result = await this.agentsService.runWorkflowSkill('qae', 'explore_app', { url: environment.baseUrl }, explorationRunId || randomUUID(), 'local', false);
       return result.summary || null;
     } catch (error) {
       this.logger.warn(`Exploration failed, falling back to catalogued coverage only: ${error.message}`);

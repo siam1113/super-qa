@@ -56,6 +56,7 @@ export function GenerateTestCasesWizardModal({
   const [explorationRunId, setExplorationRunId] = useState<string | null>(null);
   const [explorationStartPath, setExplorationStartPath] = useState('');
   const [explorationFocus, setExplorationFocus] = useState('');
+  const [explorationAutoCount, setExplorationAutoCount] = useState(true);
 
   const [generateError, setGenerateError] = useState('');
   const [proposals, setProposals] = useState<Proposal[] | null>(null);
@@ -105,7 +106,7 @@ export function GenerateTestCasesWizardModal({
   }, [selectedSourceId]);
 
   const chooseMethod = (value: Method) => { setMethod(value); setPhase('configure'); };
-  const backToChoose = () => { setMethod(null); setPhase('choose'); setSelectedSourceId(null); setSelectedTicket(null); setSelectedEnvironmentId(null); setExplorationRunId(null); setExplorationStartPath(''); setExplorationFocus(''); setGenerateError(''); };
+  const backToChoose = () => { setMethod(null); setPhase('choose'); setSelectedSourceId(null); setSelectedTicket(null); setSelectedEnvironmentId(null); setExplorationRunId(null); setExplorationStartPath(''); setExplorationFocus(''); setExplorationAutoCount(true); setGenerateError(''); };
   const backToConfigure = () => { setPhase('configure'); setGenerateError(''); setProposals(null); setExplorationRunId(null); };
 
   const buildRequestBody = (runId?: string) => method === 'instruction'
@@ -113,8 +114,9 @@ export function GenerateTestCasesWizardModal({
     : method === 'ticket'
       ? { mode: 'ticket', documentId: selectedTicket?.id, count }
       : {
-          mode: 'exploration', count, environmentId: selectedEnvironmentId || undefined, explorationRunId: runId,
-          explorationStartPath: explorationStartPath.trim() || undefined, instructions: explorationFocus.trim() || undefined,
+          mode: 'exploration', count: explorationAutoCount ? undefined : count, environmentId: selectedEnvironmentId || undefined,
+          explorationRunId: runId, explorationStartPath: explorationStartPath.trim() || undefined,
+          instructions: explorationFocus.trim() || undefined,
         };
 
   const generate = async () => {
@@ -358,7 +360,24 @@ export function GenerateTestCasesWizardModal({
                   <textarea value={explorationFocus} onChange={event => setExplorationFocus(event.target.value)} rows={2} placeholder="e.g. focus on the checkout and payment flow" className="ui-field mt-1.5 w-full resize-none text-sm"/>
                   <span className="mt-1 block text-xs font-normal text-text-secondary">Guides what QAE looks for in what it explores — it doesn't change which pages get visited.</span>
                 </label>
-                <CountStepper count={count} onChange={setCount}/>
+                <div className="mt-3 flex items-center justify-between rounded-lg border border-border px-3.5 py-2.5">
+                  <span className="text-xs font-semibold text-text-secondary">HOW MANY CASES</span>
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => setExplorationAutoCount(true)}
+                            className={cn('rounded px-2 py-1 text-xs font-medium', explorationAutoCount ? 'bg-accent-purple/15 text-accent-purple' : 'text-text-secondary hover:text-text-primary')}>
+                      Let QAE decide
+                    </button>
+                    {explorationAutoCount ? (
+                      <button type="button" onClick={() => setExplorationAutoCount(false)} className="text-xs text-text-secondary hover:text-text-primary">Set a number</button>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <button type="button" aria-label="Fewer cases" disabled={count <= 1} onClick={() => setCount(Math.max(1, count - 1))} className="ui-icon-button disabled:opacity-30"><Minus size={14}/></button>
+                        <span className="w-5 text-center text-sm font-semibold tabular-nums">{count}</span>
+                        <button type="button" aria-label="More cases" disabled={count >= 8} onClick={() => setCount(Math.min(8, count + 1))} className="ui-icon-button disabled:opacity-30"><Plus size={14}/></button>
+                      </div>
+                    )}
+                  </div>
+                </div>
                 <div className="mt-auto space-y-1.5 pt-4">
                   <button type="button" onClick={() => void generate()} className="ui-button-primary w-full">Explore & generate</button>
                   <RunInBackgroundButton queuing={queuing} onClick={() => void runInBackground()}/>
@@ -368,21 +387,14 @@ export function GenerateTestCasesWizardModal({
             )}
 
             {phase === 'generating' && (
-              <div className="motion-safe:animate-fade-in flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
-                {method === 'exploration' && explorationRunId ? (
-                  <>
-                    <p className="text-sm font-medium">QAE is exploring the app…</p>
-                    <div className="h-[26rem] w-full max-w-lg">
-                      <ExplorationLiveViewer runId={explorationRunId}/>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <Loader2 size={28} className="animate-spin text-accent-purple"/>
-                    <p className="text-sm font-medium">QAE is designing test cases…</p>
-                  </>
-                )}
-              </div>
+              method === 'exploration' && explorationRunId ? (
+                <ExplorationLiveViewer runId={explorationRunId}/>
+              ) : (
+                <div className="motion-safe:animate-fade-in flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
+                  <Loader2 size={28} className="animate-spin text-accent-purple"/>
+                  <p className="text-sm font-medium">QAE is designing test cases…</p>
+                </div>
+              )
             )}
 
             {phase === 'review' && (

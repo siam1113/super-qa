@@ -38,6 +38,11 @@ export interface LiveNetworkRequest {
 
 export type LiveConnectionState = 'connecting' | 'open' | 'closed' | 'not-found';
 
+export interface LiveQuestion {
+  questionId: string;
+  prompt: string;
+}
+
 export interface LiveExecutionState {
   connection: LiveConnectionState;
   status: string;
@@ -46,6 +51,7 @@ export interface LiveExecutionState {
   consoleLogs: LiveConsoleLog[];
   networkRequests: LiveNetworkRequest[];
   latestFrame: string | null;
+  pendingQuestion: LiveQuestion | null;
 }
 
 const AGENTS_URL = process.env.NEXT_PUBLIC_AGENTS_URL || 'http://localhost:8000';
@@ -64,6 +70,20 @@ export async function cancelExecution(runId: string): Promise<void> {
   }
 }
 
+/** Answers a run's pending clarifying question (see LiveExecutionRegistry.ask on the
+ * agents side). A late answer past the asker's 30s window is a harmless no-op there. */
+export async function answerLiveQuestion(runId: string, questionId: string, text: string): Promise<void> {
+  const response = await fetch(`${AGENTS_URL}/executions/${runId}/answer`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ questionId, text }),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.detail || `Could not send answer (${response.status})`);
+  }
+}
+
 const initialState: LiveExecutionState = {
   connection: 'connecting',
   status: 'running',
@@ -72,6 +92,7 @@ const initialState: LiveExecutionState = {
   consoleLogs: [],
   networkRequests: [],
   latestFrame: null,
+  pendingQuestion: null,
 };
 
 export function useLiveExecution(runId: string | null): LiveExecutionState {
@@ -118,11 +139,16 @@ export function useLiveExecution(runId: string | null): LiveExecutionState {
                 consoleLogs: message.consoleLogs || [],
                 networkRequests: message.networkRequests || [],
                 latestFrame: message.latestFrame || previous.latestFrame,
+                pendingQuestion: message.pendingQuestion || null,
               };
             case 'step':
               return { ...previous, steps: message.steps || [] };
             case 'frame':
               return { ...previous, latestFrame: message.dataUrl };
+            case 'question':
+              return { ...previous, pendingQuestion: { questionId: message.questionId, prompt: message.prompt } };
+            case 'question_resolved':
+              return { ...previous, pendingQuestion: null };
             case 'console':
               return { ...previous, consoleLogs: [...previous.consoleLogs, message.log].slice(-500) };
             case 'network':

@@ -406,7 +406,6 @@ export class QaService {
    * creates only the ones it wants via the existing createTestCase endpoint.
    */
   async generateTestCases(dto: GenerateQaCasesDto) {
-    const count = dto.count || 3;
     let framing: string;
     let context: string;
     if (dto.mode === 'instruction') {
@@ -427,16 +426,23 @@ export class QaService {
       const coverageContext = coverage.length
         ? `Known flows and how many test cases currently cover each (lowest coverage first):\n${coverage.map(item => `- ${item.name}: ${item.cases} case(s)`).join('\n')}`
         : 'No flows have been catalogued yet for this platform; propose cases for common, high-value areas of a typical web application.';
-      const explored = dto.environmentId
-        ? await this.exploreEnvironment(dto.environmentId, dto.explorationRunId, dto.explorationStartPath)
-        : null;
       // The user's free-text focus (same field 'instruction' mode uses) steers what
       // the model looks for in what was explored; it never reaches the browser itself.
       const focus = dto.instructions?.trim();
-      if (explored) {
+      if (dto.environmentId) {
+        // The user explicitly asked QAE to explore a real environment, so generation
+        // must be grounded in what was actually found there — if exploration itself
+        // failed, stop rather than quietly falling back to guessing from catalogued
+        // flow names, which would look like it explored when it didn't.
+        const explored = await this.exploreEnvironment(dto.environmentId, dto.explorationRunId, dto.explorationStartPath);
+        if (!explored) {
+          throw new ServiceUnavailableException(
+            'QAE could not explore this environment, so it will not invent test cases in its place. ' +
+            "Check the environment's base URL is reachable, or switch to \"Coverage stats only\" to generate from catalogued flows instead.");
+        }
         framing = focus
-          ? `You just explored the live application below. Focus specifically on what the user asked for: "${focus}". Use what you actually observed to design cases that cover it.`
-          : 'You just explored the live application below. Use what you actually observed to find the biggest coverage gaps against the catalogued test cases, then design cases that close them.';
+          ? `You just explored the live application below. Focus specifically on what the user asked for: "${focus}". Only propose cases for pages, links, and controls explicitly present in what you observed below — never invent functionality you did not see.`
+          : 'You just explored the live application below. Only propose cases for pages, links, and controls explicitly present in what you observed below — never invent functionality you did not see, and do not pad with generic cases unrelated to it.';
         context = `What exploring the live app found:\n${explored}\n\n${coverageContext}`;
       } else {
         framing = focus
@@ -445,16 +451,22 @@ export class QaService {
         context = coverageContext;
       }
     }
+    // No count means the model decides how many cases the evidence warrants, rather
+    // than being forced to pad or truncate to hit an arbitrary number.
+    const count = dto.count;
+    const countInstruction = count
+      ? `Propose exactly ${count} concrete, runnable test case${count === 1 ? '' : 's'} covering distinct, important behavior. Do not repeat behavior already covered by an existing case.`
+      : 'Propose as many concrete, runnable test cases as the evidence above genuinely warrants — typically 1 to 8. Do not pad with filler or invent cases beyond what the evidence supports, and do not under-cover if there is clearly more worth testing.';
     const prompt = [
       'Do not call any tools or skills for this request; just answer directly in your reply text.',
       framing,
       context,
-      `Propose exactly ${count} concrete, runnable test case${count === 1 ? '' : 's'} covering distinct, important behavior. Do not repeat behavior already covered by an existing case.`,
+      countInstruction,
       'Reply with ONLY a JSON array, no markdown code fences and no prose before or after it. Each element must match this shape exactly: {"title": string, "steps": [{"action": string, "expected": string}], "priority": "P0"|"P1"|"P2"|"P3", "risk": "low"|"medium"|"high"|"critical", "flow": string, "tags": string[]}.',
       'Each test case needs 2 to 6 steps. Keep actions and expected outcomes concrete and independently verifiable. "flow" should name the feature area the case belongs to.',
     ].join('\n\n');
     const chatResult = await this.agentsService.chatWithMemories('qae', { message: prompt }, []);
-    return { proposals: this.parseProposedCases(chatResult.response, count) };
+    return { proposals: this.parseProposedCases(chatResult.response, count || 12) };
   }
 
   // Drives a real explore_app run against the environment's baseUrl so
@@ -462,10 +474,11 @@ export class QaService {
   // only the DB's catalogued-flow coverage stats. 'local' is the
   // established sentinel project identity for this module's unscoped
   // (legacy, pre-multi-tenancy) callers — see shared.skills.suites'
-  // current_scope().identity check. Degrades to null (not a thrown error)
-  // on any failure — missing/misconfigured environment, agents runtime
-  // unreachable, QA_WORKFLOW_KEY unset — so generation still falls back to
-  // the DB-only context rather than failing the whole request outright.
+  // current_scope().identity check. Returns null on any failure — missing/
+  // misconfigured environment, agents runtime unreachable, QA_WORKFLOW_KEY
+  // unset, nothing crawled — the caller (generateTestCases) then stops
+  // rather than quietly substituting catalogued-coverage guessing, since
+  // the user explicitly asked for this environment to be explored.
   private async exploreEnvironment(environmentId: string, explorationRunId?: string, startPath?: string): Promise<string | null> {
     try {
       const environment = await this.database.getRepository(Environment).findOneBy({ id: environmentId });
@@ -490,15 +503,21 @@ export class QaService {
       // result.summary is always a fixed placeholder ("Workflow artifact produced;
       // inspect its data for QA outcomes") on success — never a real description —
       // so the actual findings have to be built from result.data.pages ourselves.
-      const pages = (result.data as { pages?: unknown })?.pages;
+      const data = result.data as { pages?: unknown; user_guidance?: unknown };
+      const pages = data?.pages;
       if (!Array.isArray(pages) || pages.length === 0) return null;
-      return pages.map((page, index) => {
+      const summary = pages.map((page, index) => {
         const url = typeof page?.url === 'string' ? page.url : '(unknown URL)';
         const snapshot = typeof page?.snapshot === 'string' ? page.snapshot.slice(0, 1000) : '';
         return `Page ${index + 1}: ${url}\n${snapshot}`;
       }).join('\n\n').slice(0, 8000);
+      // Set when exploration hit a problem mid-crawl and a live viewer answered
+      // the resulting clarifying question within its 30s window (see explore_live's
+      // ask_user) — folded in as extra context, not a replacement for what was found.
+      const guidance = typeof data?.user_guidance === 'string' ? data.user_guidance : null;
+      return guidance ? `${summary}\n\nGuidance the user gave mid-exploration: ${guidance}` : summary;
     } catch (error) {
-      this.logger.warn(`Exploration failed, falling back to catalogued coverage only: ${error.message}`);
+      this.logger.warn(`Exploration failed: ${error.message}`);
       return null;
     }
   }

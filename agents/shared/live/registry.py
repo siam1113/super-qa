@@ -10,6 +10,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Set
+from uuid import uuid4
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,8 @@ class LiveSession:
     network_requests: List[Dict[str, Any]] = field(default_factory=list)
     latest_frame: Optional[str] = None
     subscribers: Set[asyncio.Queue] = field(default_factory=set)
+    pending_question: Optional[Dict[str, Any]] = None
+    pending_answer: Optional["asyncio.Future[str]"] = field(default=None, repr=False)
 
     def summary(self) -> Dict[str, Any]:
         return {
@@ -52,6 +55,7 @@ class LiveSession:
             "consoleLogs": self.console_logs[-200:],
             "networkRequests": self.network_requests[-200:],
             "latestFrame": self.latest_frame,
+            "pendingQuestion": self.pending_question,
         }
 
 
@@ -95,6 +99,10 @@ class LiveExecutionRegistry:
             session.network_requests.append(event["request"])
         elif event_type == "frame":
             session.latest_frame = event["dataUrl"]
+        elif event_type == "question":
+            session.pending_question = {"questionId": event["questionId"], "prompt": event["prompt"]}
+        elif event_type == "question_resolved":
+            session.pending_question = None
 
         for queue in list(session.subscribers):
             try:
@@ -102,6 +110,35 @@ class LiveExecutionRegistry:
             except asyncio.QueueFull:
                 if event_type != "frame":
                     logger.warning(f"Dropping event for slow live viewer on {run_id}: {event_type}")
+
+    async def ask(self, run_id: str, prompt: str, timeout: float = 30) -> Optional[str]:
+        """Pause and ask a live viewer for guidance (e.g. the crawl hit something it
+        can't resolve on its own). Returns the viewer's answer, or None if no one
+        answers within `timeout` seconds — callers must have a sensible default for
+        that case, since a live viewer is never guaranteed to be watching."""
+        session = self._sessions.get(run_id)
+        if not session:
+            return None
+        question_id = uuid4().hex
+        future: "asyncio.Future[str]" = asyncio.get_event_loop().create_future()
+        session.pending_answer = future
+        self.publish(run_id, {"type": "question", "questionId": question_id, "prompt": prompt})
+        try:
+            return await asyncio.wait_for(future, timeout=timeout)
+        except asyncio.TimeoutError:
+            return None
+        finally:
+            session.pending_answer = None
+            self.publish(run_id, {"type": "question_resolved", "questionId": question_id})
+
+    def answer(self, run_id: str, question_id: str, text: str) -> bool:
+        session = self._sessions.get(run_id)
+        if not session or not session.pending_question or session.pending_question.get("questionId") != question_id:
+            return False
+        if session.pending_answer and not session.pending_answer.done():
+            session.pending_answer.set_result(text)
+            return True
+        return False
 
     def complete(self, run_id: str, status: str) -> None:
         session = self._sessions.get(run_id)

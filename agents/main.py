@@ -732,6 +732,20 @@ async def cancel_execution(run_id: str):
     return {"runId": run_id, "cancelled": True}
 
 
+class AnswerQuestionRequest(BaseModel):
+    questionId: str
+    text: str = Field(min_length=1, max_length=2000)
+
+
+@app.post("/executions/{run_id}/answer")
+async def answer_question(run_id: str, request: AnswerQuestionRequest):
+    """Resolve a live run's pending clarifying question (see LiveExecutionRegistry.ask).
+    A stale or already-resolved questionId just means the asker's 30s wait already
+    timed out and moved on; still returns 200 rather than treating the race as an error."""
+    get_live_registry().answer(run_id, request.questionId, request.text)
+    return {"runId": run_id}
+
+
 class AnalyzeExecutionRequest(BaseModel):
     """Request body for a one-shot AI analysis of a failed execution."""
     testName: str

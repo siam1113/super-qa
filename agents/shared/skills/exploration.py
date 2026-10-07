@@ -189,14 +189,24 @@ async def explore_live(value, target, request_id, session_factory=browser_sessio
                 pass
         live.publish(request_id, {"type": "frame", "dataUrl": "data:image/jpeg;base64," + base64.b64encode(data).decode()})
 
+    async def ask_user(prompt):
+        # Pauses the crawl to ask a live viewer for guidance when it hits something
+        # it can't resolve deterministically (a real browser failure). Doesn't
+        # change what the crawl does next — this is a bounded, deterministic skill,
+        # not an agent that replans — but a reply is recorded and handed to the
+        # test-case generation step as extra context. No reply within 30s (no one
+        # watching, or they just don't answer in time) and exploration proceeds
+        # exactly as it would have with no question asked at all.
+        return await live.ask(request_id, prompt, timeout=30)
+
     try:
-        await explore_live_session(value, target, start, report, queue, queued, visited, filled_values, session_factory, publish_steps, publish_frame)
+        await explore_live_session(value, target, start, report, queue, queued, visited, filled_values, session_factory, publish_steps, publish_frame, ask_user)
     finally:
         live.complete(request_id, "completed")
     return report
 
 
-async def explore_live_session(value, target, start, report, queue, queued, visited, filled_values, session_factory, publish_steps, publish_frame):
+async def explore_live_session(value, target, start, report, queue, queued, visited, filled_values, session_factory, publish_steps, publish_frame, ask_user):
     output_size = 0
     async with session_factory(target.allowed_domains, value.max_commands) as browser:
         async def observe(depth):
@@ -315,6 +325,13 @@ async def explore_live_session(value, target, start, report, queue, queued, visi
         except BrowserFailure as error:
             report["stop_reason"] = "browser_error"
             report["error"] = str(error)
+            guidance = await ask_user(
+                f"Exploration hit a problem and had to stop: {error}. "
+                "Any guidance for the test cases QAE is about to design (e.g. what to focus on instead, "
+                "or whether this area needs a different environment/credentials)? Replying within 30s "
+                "will be used as extra context; otherwise QAE continues without it.")
+            if guidance:
+                report["user_guidance"] = guidance
         except asyncio.TimeoutError:
             report["stop_reason"] = "time_budget"
         if report["stop_reason"] != "time_budget" and browser.commands < value.max_commands:

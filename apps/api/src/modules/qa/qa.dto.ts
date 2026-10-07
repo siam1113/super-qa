@@ -43,6 +43,11 @@ export class GenerateQaCasesDto {
   // Client-generated id so the wizard can open its live-exploration viewer
   // before this request resolves; becomes the agents runtime's live run id.
   @IsOptional() @IsUUID() explorationRunId?: string;
+  // Exploration mode only: optional relative path to start the crawl from
+  // instead of the environment's base URL (e.g. "/checkout"). Validated
+  // strictly by the explore_app skill itself; an invalid path just degrades
+  // to no exploration summary, same as any other exploration failure.
+  @IsOptional() @IsString() @Length(1, 500) explorationStartPath?: string;
 }
 
 export class RefineQaCaseDto {

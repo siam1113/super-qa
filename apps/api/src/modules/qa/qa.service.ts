@@ -427,12 +427,21 @@ export class QaService {
       const coverageContext = coverage.length
         ? `Known flows and how many test cases currently cover each (lowest coverage first):\n${coverage.map(item => `- ${item.name}: ${item.cases} case(s)`).join('\n')}`
         : 'No flows have been catalogued yet for this platform; propose cases for common, high-value areas of a typical web application.';
-      const explored = dto.environmentId ? await this.exploreEnvironment(dto.environmentId, dto.explorationRunId) : null;
+      const explored = dto.environmentId
+        ? await this.exploreEnvironment(dto.environmentId, dto.explorationRunId, dto.explorationStartPath)
+        : null;
+      // The user's free-text focus (same field 'instruction' mode uses) steers what
+      // the model looks for in what was explored; it never reaches the browser itself.
+      const focus = dto.instructions?.trim();
       if (explored) {
-        framing = 'You just explored the live application below. Use what you actually observed to find the biggest coverage gaps against the catalogued test cases, then design cases that close them.';
+        framing = focus
+          ? `You just explored the live application below. Focus specifically on what the user asked for: "${focus}". Use what you actually observed to design cases that cover it.`
+          : 'You just explored the live application below. Use what you actually observed to find the biggest coverage gaps against the catalogued test cases, then design cases that close them.';
         context = `What exploring the live app found:\n${explored}\n\n${coverageContext}`;
       } else {
-        framing = 'You are exploring this QA platform\'s catalogued application flows and current test coverage to find the biggest coverage gaps, then designing cases that close them.';
+        framing = focus
+          ? `You are designing test cases for a QA lead, focused specifically on what they asked for: "${focus}".`
+          : 'You are exploring this QA platform\'s catalogued application flows and current test coverage to find the biggest coverage gaps, then designing cases that close them.';
         context = coverageContext;
       }
     }
@@ -457,7 +466,7 @@ export class QaService {
   // on any failure — missing/misconfigured environment, agents runtime
   // unreachable, QA_WORKFLOW_KEY unset — so generation still falls back to
   // the DB-only context rather than failing the whole request outright.
-  private async exploreEnvironment(environmentId: string, explorationRunId?: string): Promise<string | null> {
+  private async exploreEnvironment(environmentId: string, explorationRunId?: string, startPath?: string): Promise<string | null> {
     try {
       const environment = await this.database.getRepository(Environment).findOneBy({ id: environmentId });
       if (!environment?.baseUrl) {
@@ -466,7 +475,12 @@ export class QaService {
       }
       // Use the wizard's pre-generated id as the agents runtime's live run id so its
       // viewer (already connected via useLiveExecution) receives this run's steps.
-      const result = await this.agentsService.runWorkflowSkill('qae', 'explore_app', { url: environment.baseUrl }, explorationRunId || randomUUID(), 'local', false);
+      // start_path is validated strictly by explore_app's own ExploreInput contract;
+      // an invalid value just fails that one run, degrading to null below like any
+      // other exploration failure, rather than rejecting the whole request here.
+      const result = await this.agentsService.runWorkflowSkill('qae', 'explore_app',
+        { url: environment.baseUrl, start_path: startPath || undefined },
+        explorationRunId || randomUUID(), 'local', false);
       return result.summary || null;
     } catch (error) {
       this.logger.warn(`Exploration failed, falling back to catalogued coverage only: ${error.message}`);

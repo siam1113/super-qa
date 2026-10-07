@@ -54,6 +54,8 @@ export function GenerateTestCasesWizardModal({
   const [environmentsError, setEnvironmentsError] = useState('');
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<string | null>(null);
   const [explorationRunId, setExplorationRunId] = useState<string | null>(null);
+  const [explorationStartPath, setExplorationStartPath] = useState('');
+  const [explorationFocus, setExplorationFocus] = useState('');
 
   const [generateError, setGenerateError] = useState('');
   const [proposals, setProposals] = useState<Proposal[] | null>(null);
@@ -103,14 +105,17 @@ export function GenerateTestCasesWizardModal({
   }, [selectedSourceId]);
 
   const chooseMethod = (value: Method) => { setMethod(value); setPhase('configure'); };
-  const backToChoose = () => { setMethod(null); setPhase('choose'); setSelectedSourceId(null); setSelectedTicket(null); setSelectedEnvironmentId(null); setExplorationRunId(null); setGenerateError(''); };
+  const backToChoose = () => { setMethod(null); setPhase('choose'); setSelectedSourceId(null); setSelectedTicket(null); setSelectedEnvironmentId(null); setExplorationRunId(null); setExplorationStartPath(''); setExplorationFocus(''); setGenerateError(''); };
   const backToConfigure = () => { setPhase('configure'); setGenerateError(''); setProposals(null); setExplorationRunId(null); };
 
   const buildRequestBody = (runId?: string) => method === 'instruction'
     ? { mode: 'instruction', instructions: instructions.trim(), count }
     : method === 'ticket'
       ? { mode: 'ticket', documentId: selectedTicket?.id, count }
-      : { mode: 'exploration', count, environmentId: selectedEnvironmentId || undefined, explorationRunId: runId };
+      : {
+          mode: 'exploration', count, environmentId: selectedEnvironmentId || undefined, explorationRunId: runId,
+          explorationStartPath: explorationStartPath.trim() || undefined, instructions: explorationFocus.trim() || undefined,
+        };
 
   const generate = async () => {
     setGenerateError('');
@@ -344,6 +349,14 @@ export function GenerateTestCasesWizardModal({
                       ))}
                     </select>
                   )}
+                </label>
+                <label className="mt-3 block text-xs font-semibold text-text-secondary">START PATH (OPTIONAL)
+                  <input type="text" value={explorationStartPath} onChange={event => setExplorationStartPath(event.target.value)} placeholder="/checkout" className="ui-field mt-1.5 w-full text-sm"/>
+                  <span className="mt-1 block text-xs font-normal text-text-secondary">Leave blank to start from the environment's base URL.</span>
+                </label>
+                <label className="mt-3 block text-xs font-semibold text-text-secondary">FOCUS (OPTIONAL)
+                  <textarea value={explorationFocus} onChange={event => setExplorationFocus(event.target.value)} rows={2} placeholder="e.g. focus on the checkout and payment flow" className="ui-field mt-1.5 w-full resize-none text-sm"/>
+                  <span className="mt-1 block text-xs font-normal text-text-secondary">Guides what QAE looks for in what it explores — it doesn't change which pages get visited.</span>
                 </label>
                 <CountStepper count={count} onChange={setCount}/>
                 <div className="mt-auto space-y-1.5 pt-4">

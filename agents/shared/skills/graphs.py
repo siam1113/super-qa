@@ -108,7 +108,7 @@ def create_skill_graph(skill, capabilities):
             elif skill.name == "browser_execution_status":
                 data = await capabilities.execution_status(value)
             elif skill.name == "explore_app":
-                data = await capabilities.explore(value)
+                data = await capabilities.explore(value, state["request"]["request_id"])
             else:
                 raise ValueError("No implementation for skill")
             if state.get("input_provenance"):

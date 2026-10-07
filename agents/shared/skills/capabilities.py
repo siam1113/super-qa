@@ -161,18 +161,18 @@ class Capabilities:
         result = await self.harness("POST", "/" + str(value.execution_id) + "/cancel")
         return {"execution": result, "job": job_reference(result), "verdict_origin": "existing_browser_harness"}
 
-    async def explore(self, value):
+    async def explore(self, value, request_id):
         if not current_scope().can_execute:
             raise SkillBlocked("This app assignment cannot start browser work")
         if value.url:
             # Ad-hoc exploration of an address the user named directly; no workspace registration required.
             from .exploration import adhoc_target_for, explore_live
-            return await explore_live(value, adhoc_target_for(value))
+            return await explore_live(value, adhoc_target_for(value), request_id)
         require_resource("browser_targets", value.target_id)
         from .exploration import configured_targets, explore_live, target_for
         live = configured_targets()
         if value.mode == "live" or (value.mode == "auto" and value.target_id in live):
-            return await explore_live(value, target_for(value))
+            return await explore_live(value, target_for(value), request_id)
         if value.actions or value.authenticate:
             raise SkillBlocked("Interactions and authentication require a configured live browser target")
         return await self.explore_static_bundle(value)

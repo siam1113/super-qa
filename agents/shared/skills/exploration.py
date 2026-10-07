@@ -11,6 +11,7 @@ from urllib.parse import urljoin, urlsplit, urlunsplit
 
 from pydantic import Field, field_validator, model_validator
 
+from shared.live import get_live_registry
 from shared.mcp.agent_browser.client import BrowserBudget, BrowserFailure, browser_session
 from .contracts import Contract, SkillBlocked
 
@@ -131,7 +132,7 @@ def redact(value, filled_values):
     return value
 
 
-async def explore_live(value, target, session_factory=browser_session):
+async def explore_live(value, target, request_id, session_factory=browser_session):
     start = app_url(target, value.start_path)
     if not can_visit(target, start):
         raise SkillBlocked("The starting path is excluded by the target configuration")
@@ -145,8 +146,35 @@ async def explore_live(value, target, session_factory=browser_session):
     queue = deque()
     queued, visited = set(), set()
     filled_values = [step.value for step in value.actions if step.value]
-    output_size = 0
 
+    # No screenshot/image capability exists in agent-browser's exposed operation
+    # set (BROWSER_BINDINGS) — this is a text-only live view: each visited page
+    # becomes a pseudo "step" (reusing LiveStepState's shape so the existing
+    # useLiveExecution hook/WebSocket needs no changes) with the accessibility
+    # snapshot excerpt as its "result", not a frame. live.create's own
+    # subscriber fan-out means a viewer can connect anytime from here on.
+    live = get_live_registry()
+    live.create(request_id, request_id, f"Exploring {target.base_url}")
+
+    def publish_steps():
+        # Redact entered values here too, not just in the final report below —
+        # otherwise a live viewer sees unredacted form input (passwords, etc.)
+        # streamed in real time even though the persisted artifact scrubs it.
+        live.publish(request_id, {"type": "step", "steps": [{
+            "stepId": page["id"], "stepNumber": index + 1, "description": redact(page["url"], filled_values),
+            "stepType": "exploration", "status": "passed", "expectedResult": None,
+            "actualResult": redact(page["snapshot"][:500], filled_values), "actions": [], "durationMs": 0, "errorMessage": None,
+        } for index, page in enumerate(report["pages"])]})
+
+    try:
+        await explore_live_session(value, target, start, report, queue, queued, visited, filled_values, session_factory, publish_steps)
+    finally:
+        live.complete(request_id, "completed")
+    return report
+
+
+async def explore_live_session(value, target, start, report, queue, queued, visited, filled_values, session_factory, publish_steps):
+    output_size = 0
     async with session_factory(target.allowed_domains, value.max_commands) as browser:
         async def observe(depth):
             nonlocal output_size
@@ -170,6 +198,7 @@ async def explore_live(value, target, session_factory=browser_session):
             # Save the observation before optional link reads so budgets retain useful evidence.
             report["pages"].append(page)
             visited.add(url)
+            publish_steps()
             output_size += len(json.dumps(page).encode())
             if output_size > 250000:
                 raise BrowserBudget("output_budget")

@@ -25,7 +25,9 @@ export function AcceptInvitationPage() {
             ? 'The server is temporarily unavailable. Please try again in a moment.'
             : 'Invitation could not be accepted.'));
         }
-        location.assign('/settings');
+        // '/' decides AppShell vs. /settings itself (ScopedHomeRedirect) rather
+        // than hardcoding /settings here and duplicating that decision.
+        location.assign('/');
       })
       .catch(failure => setError(failure instanceof Error ? failure.message : 'Invitation could not be accepted.')).finally(() => setBusy(false));
   };

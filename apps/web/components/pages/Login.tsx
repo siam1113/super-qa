@@ -24,7 +24,11 @@ export function LoginPage() {
             : 'Sign in failed.'));
         }
         if (!result?.user) throw new Error('Sign in failed: unexpected response from the server.');
-        location.assign(result.user.accountType === 'super_admin' ? '/admin' : result.user.onboardingCompleted === false ? '/onboarding' : '/settings');
+        // '/' decides AppShell vs. /settings itself (ScopedHomeRedirect, based
+        // on whether legacy routes are actually available) — redirecting there
+        // instead of hardcoding /settings keeps this in sync with that logic
+        // rather than duplicating it.
+        location.assign(result.user.accountType === 'super_admin' ? '/admin' : result.user.onboardingCompleted === false ? '/onboarding' : '/');
       })
       .catch(failure => setError(failure instanceof Error ? failure.message : 'Sign in failed.')).finally(() => setBusy(false));
   };

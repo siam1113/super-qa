@@ -1,25 +1,36 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { AppShell } from './AppShell';
+import type { Page } from '@/lib/types';
 
-// Shared by every route that used to render AppShell directly (/, /chat,
+// Shared by every route that used to render AppShell unconditionally (/, /chat,
 // /integrations). AppShell fires its legacy workspace/sources/agent-task
-// fetches on mount regardless of which page is selected, and every one of
-// those is permanently blocked by AutonomyLockdownGuard in production (see
-// docs/autonomy-operations.md) — so rendering AppShell at all under lockdown
-// 403-storms for any visitor, signed in or not. None of these routes have a
-// scoped equivalent of their own, so they all land on the same scoped
-// destination a session actually resolves to, mirroring Login.tsx's
-// post-login redirect.
-export function ScopedHomeRedirect() {
+// fetches on mount regardless of which page is selected, and those are blocked
+// by AutonomyLockdownGuard whenever this deployment has lockdown on (see
+// docs/autonomy-operations.md) — so rendering AppShell at all in that mode
+// 403-storms for any visitor, signed in or not. legacyAvailable mirrors the
+// guard's own condition exactly (from /api/auth/config), so this renders the
+// real page when the legacy app actually works, and only falls back to the
+// scoped /settings destination when it doesn't — rather than hardcoding one
+// or the other and drifting out of sync with what the backend enforces.
+export function ScopedHomeRedirect({ legacyPage }: { legacyPage?: Page } = {}) {
+  const [showLegacy, setShowLegacy] = useState(false);
+
   useEffect(() => {
-    void fetch('/api/auth/session', { cache: 'no-store', credentials: 'same-origin' })
-      .then(async response => {
-        if (!response.ok) { location.assign('/login'); return; }
-        const result = await response.json();
-        location.assign(result.user.accountType === 'super_admin' ? '/admin' : result.user.onboardingCompleted === false ? '/onboarding' : '/settings');
+    void Promise.all([
+      fetch('/api/auth/session', { cache: 'no-store', credentials: 'same-origin' }).then(r => r.ok ? r.json() : null),
+      fetch('/api/auth/config', { cache: 'no-store', credentials: 'same-origin' }).then(r => r.ok ? r.json() : null),
+    ])
+      .then(([session, config]) => {
+        if (!session) { location.assign('/login'); return; }
+        if (session.user.accountType === 'super_admin') { location.assign('/admin'); return; }
+        if (session.user.onboardingCompleted === false) { location.assign('/onboarding'); return; }
+        if (config?.legacyAvailable) { setShowLegacy(true); return; }
+        location.assign('/settings');
       })
       .catch(() => location.assign('/login'));
   }, []);
-  return null;
+
+  return showLegacy ? <AppShell initialPage={legacyPage} /> : null;
 }

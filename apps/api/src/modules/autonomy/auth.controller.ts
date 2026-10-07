@@ -30,7 +30,15 @@ export class SuperAdminGuard implements CanActivate {
 export class AuthController {
   constructor(private readonly auth: AuthService, private readonly autonomy: AutonomyService) {}
 
-  @Get('config') config() { return { ssoEnabled: this.auth.oidcEnabled() }; }
+  // Mirrors AutonomyLockdownGuard's own condition exactly, so the frontend's
+  // "where do I land/can I navigate to the legacy app" decision never drifts
+  // out of sync with what the backend actually enforces.
+  @Get('config') config() {
+    const lockdown = process.env.AUTONOMY_LOCKDOWN === 'false' ? false
+      : process.env.AUTONOMY_LOCKDOWN === 'true' ? true
+      : process.env.NODE_ENV === 'production';
+    return { ssoEnabled: this.auth.oidcEnabled(), legacyAvailable: !lockdown };
+  }
 
   @Post('login') @Throttle({ default: { limit: 10, ttl: 60000 } }) async login(@Body() input: LoginDto, @Res({ passthrough: true }) response: Response) {
     const session = await this.auth.login(input.email, input.password);

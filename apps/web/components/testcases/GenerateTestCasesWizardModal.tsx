@@ -7,7 +7,7 @@ import {
   Minus, Plus, ExternalLink, History,
 } from 'lucide-react';
 import { cn, getPriorityColor, getRiskColor } from '@/lib/utils';
-import type { TestCase } from '@/lib/types';
+import type { Environment, TestCase } from '@/lib/types';
 import { RunsPanel, useUnreviewedRunCount } from './RunsPanel';
 
 const ROOT = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
@@ -48,6 +48,11 @@ export function GenerateTestCasesWizardModal({
   const [ticketQuery, setTicketQuery] = useState('');
   const [selectedTicket, setSelectedTicket] = useState<TicketDoc | null>(null);
 
+  const [environments, setEnvironments] = useState<Environment[] | null>(null);
+  const [environmentsLoading, setEnvironmentsLoading] = useState(false);
+  const [environmentsError, setEnvironmentsError] = useState('');
+  const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<string | null>(null);
+
   const [generateError, setGenerateError] = useState('');
   const [proposals, setProposals] = useState<Proposal[] | null>(null);
   const [selectedIdx, setSelectedIdx] = useState<Set<number>>(new Set());
@@ -69,6 +74,21 @@ export function GenerateTestCasesWizardModal({
   }, [method, sources]);
 
   useEffect(() => {
+    if (method !== 'exploration' || environments !== null) return;
+    setEnvironmentsLoading(true);
+    setEnvironmentsError('');
+    fetch(`${ROOT}/api/environments`)
+      .then(async response => { if (!response.ok) throw new Error('Could not load environments'); return response.json(); })
+      .then((list: Environment[]) => {
+        setEnvironments(list);
+        const withBaseUrl = list.find(environment => environment.isDefault && environment.baseUrl) || list.find(environment => environment.baseUrl);
+        if (withBaseUrl) setSelectedEnvironmentId(withBaseUrl.id);
+      })
+      .catch(() => setEnvironmentsError('Could not load environments.'))
+      .finally(() => setEnvironmentsLoading(false));
+  }, [method, environments]);
+
+  useEffect(() => {
     if (!selectedSourceId) return;
     setTickets(null);
     setTicketsError('');
@@ -81,14 +101,14 @@ export function GenerateTestCasesWizardModal({
   }, [selectedSourceId]);
 
   const chooseMethod = (value: Method) => { setMethod(value); setPhase('configure'); };
-  const backToChoose = () => { setMethod(null); setPhase('choose'); setSelectedSourceId(null); setSelectedTicket(null); setGenerateError(''); };
+  const backToChoose = () => { setMethod(null); setPhase('choose'); setSelectedSourceId(null); setSelectedTicket(null); setSelectedEnvironmentId(null); setGenerateError(''); };
   const backToConfigure = () => { setPhase('configure'); setGenerateError(''); setProposals(null); };
 
   const buildRequestBody = () => method === 'instruction'
     ? { mode: 'instruction', instructions: instructions.trim(), count }
     : method === 'ticket'
       ? { mode: 'ticket', documentId: selectedTicket?.id, count }
-      : { mode: 'exploration', count };
+      : { mode: 'exploration', count, environmentId: selectedEnvironmentId || undefined };
 
   const generate = async () => {
     setGenerateError('');
@@ -193,7 +213,7 @@ export function GenerateTestCasesWizardModal({
               {!viewingRuns && phase === 'choose' && 'Choose how QAE should design the cases.'}
               {!viewingRuns && phase === 'configure' && method === 'instruction' && 'Describe what to test, in your own words.'}
               {!viewingRuns && phase === 'configure' && method === 'ticket' && 'Pick a ticket to design cases from.'}
-              {!viewingRuns && phase === 'configure' && method === 'exploration' && 'QAE will explore known flows for coverage gaps.'}
+              {!viewingRuns && phase === 'configure' && method === 'exploration' && 'Pick an environment for QAE to explore, then look for coverage gaps.'}
               {!viewingRuns && phase === 'generating' && 'QAE is designing test cases…'}
               {!viewingRuns && phase === 'review' && 'Review the proposals, then add the ones you want.'}
             </p>
@@ -300,8 +320,25 @@ export function GenerateTestCasesWizardModal({
               <div className="motion-safe:animate-fade-in flex h-full flex-col p-5">
                 <BackLink onClick={backToChoose}/>
                 <div className="mt-3 rounded-xl border border-border bg-elevated/50 p-4 text-sm text-text-secondary">
-                  QAE will look at your platform's catalogued flows and how many test cases currently cover each one, then propose cases for the areas with the weakest coverage.
+                  QAE will explore the selected environment's live app, then propose cases for the areas with the weakest coverage.
                 </div>
+                <label className="mt-3 block text-xs font-semibold text-text-secondary">ENVIRONMENT TO EXPLORE
+                  {environmentsLoading && <span className="mt-1.5 flex items-center gap-2 text-xs font-normal text-text-secondary"><Loader2 size={13} className="animate-spin"/>Loading environments…</span>}
+                  {!environmentsLoading && environmentsError && <span className="mt-1.5 block text-xs font-normal text-danger">{environmentsError}</span>}
+                  {!environmentsLoading && environments && environments.length === 0 && (
+                    <span className="mt-1.5 block text-xs font-normal text-text-secondary">No environments configured. QAE will fall back to catalogued coverage only — <a href="/environments" target="_blank" rel="noreferrer" className="text-accent-blue hover:underline">add one</a> to explore the real app.</span>
+                  )}
+                  {!environmentsLoading && environments && environments.length > 0 && (
+                    <select value={selectedEnvironmentId || ''} onChange={event => setSelectedEnvironmentId(event.target.value || null)} className="ui-field mt-1.5 w-full text-sm">
+                      <option value="">Coverage stats only (no live exploration)</option>
+                      {environments.map(environment => (
+                        <option key={environment.id} value={environment.id} disabled={!environment.baseUrl}>
+                          {environment.name}{!environment.baseUrl ? ' (no base URL set)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </label>
                 <CountStepper count={count} onChange={setCount}/>
                 <div className="mt-auto space-y-1.5 pt-4">
                   <button type="button" onClick={() => void generate()} className="ui-button-primary w-full">Explore & generate</button>

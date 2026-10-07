@@ -37,6 +37,9 @@ export class GenerateQaCasesDto {
   @IsOptional() @IsString() @Length(1, 4000) instructions?: string;
   @IsOptional() @IsUUID() documentId?: string;
   @IsOptional() @IsInt() @Min(1) @Max(8) count?: number;
+  // Exploration mode only: drives a real explore_app run against this
+  // environment's baseUrl instead of just summarizing catalogued coverage.
+  @IsOptional() @IsUUID() environmentId?: string;
 }
 
 export class RefineQaCaseDto {

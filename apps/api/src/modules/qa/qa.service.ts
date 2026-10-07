@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ConflictException, BadRequestException, ServiceUnavailableException } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
@@ -11,6 +11,7 @@ import { AgentsService } from '../agents/agents.service';
 import { BusinessItem } from '../business/entities/business-item.entity';
 import { Document } from '../documents/entities/document.entity';
 import { WorkflowArtifact } from '../autonomy/workflow-artifact.entity';
+import { Environment } from '../environments/environment.entity';
 import { QaTestCase, QaRun, QaExecution, QaHealingSuggestion, QaExecutionPlan, QaGenerationRun } from './qa.entity';
 import { CreateQaCaseDto, UpdateQaCaseDto, ReviewQaCaseDto, CreateQaRunDto, RecordQaResultDto, CreateHealingDto, SaveQaPlanDto, RunWithAgentDto, AgentExecutionResultDto, GenerateQaCasesDto, RefineQaCaseDto } from './qa.dto';
 
@@ -22,6 +23,8 @@ type RefinedCase = { title: string; steps: Array<{ action: string; expected: str
 
 @Injectable()
 export class QaService {
+  private readonly logger = new Logger(QaService.name);
+
   private sameValue(left: unknown, right: unknown): boolean {
     return isDeepStrictEqual(JSON.parse(JSON.stringify(left)), JSON.parse(JSON.stringify(right)));
   }
@@ -421,10 +424,17 @@ export class QaService {
       const coverage = flows
         .map(flow => ({ name: flow.name, cases: cases.filter(testCase => testCase.flow === flow.name).length }))
         .sort((left, right) => left.cases - right.cases);
-      framing = 'You are exploring this QA platform\'s catalogued application flows and current test coverage to find the biggest coverage gaps, then designing cases that close them.';
-      context = coverage.length
+      const coverageContext = coverage.length
         ? `Known flows and how many test cases currently cover each (lowest coverage first):\n${coverage.map(item => `- ${item.name}: ${item.cases} case(s)`).join('\n')}`
         : 'No flows have been catalogued yet for this platform; propose cases for common, high-value areas of a typical web application.';
+      const explored = dto.environmentId ? await this.exploreEnvironment(dto.environmentId) : null;
+      if (explored) {
+        framing = 'You just explored the live application below. Use what you actually observed to find the biggest coverage gaps against the catalogued test cases, then design cases that close them.';
+        context = `What exploring the live app found:\n${explored}\n\n${coverageContext}`;
+      } else {
+        framing = 'You are exploring this QA platform\'s catalogued application flows and current test coverage to find the biggest coverage gaps, then designing cases that close them.';
+        context = coverageContext;
+      }
     }
     const prompt = [
       'Do not call any tools or skills for this request; just answer directly in your reply text.',
@@ -436,6 +446,30 @@ export class QaService {
     ].join('\n\n');
     const chatResult = await this.agentsService.chatWithMemories('qae', { message: prompt }, []);
     return { proposals: this.parseProposedCases(chatResult.response, count) };
+  }
+
+  // Drives a real explore_app run against the environment's baseUrl so
+  // exploration-mode generation reflects the actual live app instead of
+  // only the DB's catalogued-flow coverage stats. 'local' is the
+  // established sentinel project identity for this module's unscoped
+  // (legacy, pre-multi-tenancy) callers — see shared.skills.suites'
+  // current_scope().identity check. Degrades to null (not a thrown error)
+  // on any failure — missing/misconfigured environment, agents runtime
+  // unreachable, QA_WORKFLOW_KEY unset — so generation still falls back to
+  // the DB-only context rather than failing the whole request outright.
+  private async exploreEnvironment(environmentId: string): Promise<string | null> {
+    try {
+      const environment = await this.database.getRepository(Environment).findOneBy({ id: environmentId });
+      if (!environment?.baseUrl) {
+        this.logger.warn(`Exploration skipped: environment ${environmentId} has no baseUrl configured`);
+        return null;
+      }
+      const result = await this.agentsService.runWorkflowSkill('qae', 'explore_app', { url: environment.baseUrl }, randomUUID(), 'local', false);
+      return result.summary || null;
+    } catch (error) {
+      this.logger.warn(`Exploration failed, falling back to catalogued coverage only: ${error.message}`);
+      return null;
+    }
   }
 
   private parseProposedCases(raw: string, max: number): ProposedCase[] {

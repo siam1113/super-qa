@@ -142,6 +142,8 @@ services:
       DOMAIN: ${DOMAIN}
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./demo:/srv/demo:ro
+      - ./marketing:/srv/marketing:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:

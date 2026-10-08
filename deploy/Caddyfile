@@ -12,6 +12,26 @@
 		reverse_proxy api:4000
 	}
 
+	# Static marketing site and product demo, bind-mounted read-only into this
+	# container (see docker-compose.prod.yml) — both use relative asset paths
+	# (styles.css, app.js), so a bare /demo or /marketing (no trailing slash)
+	# must redirect first or the browser resolves those paths one level up.
+	redir /demo /demo/ permanent
+	@demo path /demo/*
+	handle @demo {
+		uri strip_prefix /demo
+		root * /srv/demo
+		file_server
+	}
+
+	redir /marketing /marketing/ permanent
+	@marketing path /marketing/*
+	handle @marketing {
+		uri strip_prefix /marketing
+		root * /srv/marketing
+		file_server
+	}
+
 	handle {
 		reverse_proxy web:3000
 	}

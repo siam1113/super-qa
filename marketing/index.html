@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>superqa — The AI QA Team That Ships With You</title>
+<meta name="description" content="Autonomous QA agents that explore your live app, design test coverage, execute it, and fix what breaks — before you ever have to ask." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <span class="logo">super<span>qa</span></span>
+    <div class="nav-links">
+      <a href="#features">Product</a>
+      <a href="#how-it-works">How it works</a>
+      <a href="#agents">Agents</a>
+      <a href="/demo/">Demo</a>
+    </div>
+    <div class="nav-actions">
+      <a href="/" class="btn btn-ghost">Log in</a>
+      <a href="/" class="btn btn-primary">Open the app</a>
+    </div>
+  </div>
+</nav>
+
+<main>
+  <!-- ===================== HERO ===================== -->
+  <section class="hero">
+    <span class="eyebrow">AI QA TEAM</span>
+    <h1>Autonomous QA that <span>ships with you</span>, not after you.</h1>
+    <p class="lead">superqa's agents explore your live app, design test coverage from what they actually see, execute it, and fix what breaks — surfacing what matters before you ever have to ask.</p>
+    <div class="hero-actions">
+      <a href="/" class="btn btn-primary btn-lg">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        Open the app
+      </a>
+      <a href="/demo/" class="btn btn-secondary btn-lg">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8M12 18v3"/></svg>
+        View live demo
+      </a>
+    </div>
+    <p class="hero-note">No credit card to explore the demo · Full interactive walkthrough, not a video</p>
+    <div class="stat-row">
+      <div class="stat"><b>80%</b><span>less manual test authoring</span></div>
+      <div class="stat"><b>24/7</b><span>autonomous execution</span></div>
+      <div class="stat"><b>94%</b><span>self-healing accuracy</span></div>
+    </div>
+  </section>
+
+  <!-- ===================== PRODUCT PREVIEW ===================== -->
+  <div class="preview">
+    <div class="preview-inner">
+      <div class="preview-chrome"><i></i><i></i><i></i><span>app.superqa.dev/executions</span></div>
+      <div class="preview-body">
+        <div class="preview-rail">
+          <div class="r-item active"><span class="r-dot"></span>Alex · QAE</div>
+          <div class="r-item"><span class="r-dot"></span>Jordan · AUE</div>
+          <div class="r-item" style="margin-top:14px">Test Cases</div>
+          <div class="r-item">Executions</div>
+          <div class="r-item">Environments</div>
+          <div class="r-item">Coverage</div>
+        </div>
+        <div class="preview-main">
+          <h3>Recent executions</h3>
+          <div class="preview-card"><span class="dot" style="background:var(--danger)"></span><div style="flex:1"><div class="line1" style="width:58%"></div><div class="line2"></div></div><span class="pill" style="background:var(--danger-soft);color:var(--danger)">Failed</span></div>
+          <div class="preview-card"><span class="dot" style="background:var(--success)"></span><div style="flex:1"><div class="line1" style="width:46%"></div><div class="line2"></div></div><span class="pill" style="background:var(--success-soft);color:var(--success)">Passed</span></div>
+          <div class="preview-card"><span class="dot" style="background:var(--success)"></span><div style="flex:1"><div class="line1" style="width:66%"></div><div class="line2"></div></div><span class="pill" style="background:var(--success-soft);color:var(--success)">Passed</span></div>
+          <div class="preview-card"><span class="dot" style="background:var(--accent-blue)"></span><div style="flex:1"><div class="line1" style="width:40%"></div><div class="line2"></div></div><span class="pill" style="background:var(--accent-blue-soft);color:var(--accent-blue)">Self-healed</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== FEATURES ===================== -->
+  <section class="section" id="features">
+    <div class="section-head">
+      <span class="section-eyebrow">What it does</span>
+      <h2>A QA team that works while you sleep</h2>
+      <p>Not a codegen tool bolted onto your CI — agents that behave like QA engineers: they look at your real app, reason about what matters, and keep working after the first test fails.</p>
+    </div>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <span class="f-icon" style="background:var(--accent-blue-soft);color:var(--accent-blue)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M14.5 9.5l-2 5-3 1.5 2-5 3-1.5z"/></svg></span>
+        <h3>Live exploration, not guesswork</h3>
+        <p>Point an agent at a real environment and watch it navigate live, then review test cases designed only from what it actually saw — pause, stop, or redirect it anytime.</p>
+      </div>
+      <div class="feature-card">
+        <span class="f-icon" style="background:var(--info-soft);color:var(--info)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="9" width="16" height="11" rx="3"/><path d="M12 9V5"/><circle cx="12" cy="4" r="1.3" fill="currentColor"/><circle cx="9" cy="14.5" r="1.3" fill="currentColor"/><circle cx="15" cy="14.5" r="1.3" fill="currentColor"/></svg></span>
+        <h3>A teammate you talk to</h3>
+        <p>Ask about coverage gaps, flaky tests, or what to test next in a real console — and let agents work proactively, surfacing what they find before you ask.</p>
+      </div>
+      <div class="feature-card">
+        <span class="f-icon" style="background:var(--danger-soft);color:var(--danger)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z"/></svg></span>
+        <h3>Failures that fix themselves</h3>
+        <p>A locator drifts, a test fails — the agent diagnoses the root cause, proposes a resilient fix, and opens a pull request the moment a human approves it.</p>
+      </div>
+      <div class="feature-card">
+        <span class="f-icon" style="background:var(--accent-purple-soft);color:var(--accent-purple)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="2"/><path d="M12 2a10 10 0 0 1 10 10M12 6a6 6 0 0 1 6 6M12 22A10 10 0 0 1 2 12M12 18a6 6 0 0 1-6-6"/></svg></span>
+        <h3>Proactive, not just reactive</h3>
+        <p>Outpost runs agents on a schedule — scanning for coverage gaps and failure patterns — and hands you a ready-made console session the moment something's worth a look.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== HOW IT WORKS ===================== -->
+  <section class="section" id="how-it-works" style="background:var(--bg-surface);border-top:1px solid var(--border-default);border-bottom:1px solid var(--border-default)">
+    <div class="section-head">
+      <span class="section-eyebrow">How it works</span>
+      <h2>From a live app to a merged fix</h2>
+      <p>No scripts to maintain by hand, no brittle selectors to babysit.</p>
+    </div>
+    <div class="steps">
+      <div class="step"><div class="s-num">1</div><h4>Connect</h4><p>Point an agent at an environment, repo, and issue tracker.</p></div>
+      <div class="step"><div class="s-num">2</div><h4>Design</h4><p>It explores the live app and designs coverage from what it sees.</p></div>
+      <div class="step"><div class="s-num">3</div><h4>Execute</h4><p>Runs continuously, investigates failures, proposes fixes.</p></div>
+      <div class="step"><div class="s-num">4</div><h4>Ship</h4><p>You approve; it opens the PR and keeps the suite healthy.</p></div>
+    </div>
+  </section>
+
+  <!-- ===================== AGENTS ===================== -->
+  <section class="section" id="agents">
+    <div class="section-head">
+      <span class="section-eyebrow">Meet the team</span>
+      <h2>Agents with a job, not a prompt box</h2>
+      <p>Each one has a focus, a console of its own, and a name your team gives it.</p>
+    </div>
+    <div class="agent-grid">
+      <div class="agent-card">
+        <span class="a-avatar" style="background:var(--accent-blue-soft);color:var(--accent-blue)">QA</span>
+        <h4>QA Engineer</h4>
+        <div class="a-role">Plans · Designs · Investigates</div>
+        <p>Explores your app, designs test cases, triages failures, and tells you what's worth testing next.</p>
+      </div>
+      <div class="agent-card">
+        <span class="a-avatar" style="background:var(--accent-purple-soft);color:var(--accent-purple)">AU</span>
+        <h4>Automation Engineer</h4>
+        <div class="a-role">Automates · Heals · Maintains</div>
+        <p>Turns approved cases into resilient automation and keeps it running when the UI changes.</p>
+      </div>
+      <div class="agent-card">
+        <span class="a-avatar" style="background:var(--success-soft);color:var(--success)">SQ</span>
+        <h4>Super QA</h4>
+        <div class="a-role">Orchestrates</div>
+        <p>The all-rounder teammate — routes work to the right specialist and answers anything in between.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== INTEGRATIONS ===================== -->
+  <section class="section" style="padding-top:0">
+    <div class="section-head" style="margin-bottom:28px">
+      <span class="section-eyebrow">Fits your stack</span>
+      <h2 style="font-size:22px">Connects to what you already use</h2>
+    </div>
+    <div class="integrations">
+      <span class="integration-chip">GitHub</span>
+      <span class="integration-chip">Jira</span>
+      <span class="integration-chip">Confluence</span>
+      <span class="integration-chip">Zephyr</span>
+      <span class="integration-chip">Slack</span>
+      <span class="integration-chip">Microsoft Teams</span>
+    </div>
+  </section>
+
+  <!-- ===================== FINAL CTA ===================== -->
+  <div class="cta-band">
+    <h2>See what Super QA can do for you.</h2>
+    <p>Walk through the real flows — a live exploration, a chat with Alex, a self-healing fix — before you ever connect a real app.</p>
+    <div class="hero-actions">
+      <a href="/demo/" class="btn btn-primary btn-lg">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8M12 18v3"/></svg>
+        View live demo
+      </a>
+      <a href="/" class="btn btn-secondary btn-lg">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        Open the app
+      </a>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <span class="logo" style="font-size:15px">super<span>qa</span></span>
+    <span>© 2026 superqa. All screens in the demo are simulated.</span>
+    <a href="/demo/">View demo →</a>
+  </div>
+</footer>
+
+</body>
+</html>

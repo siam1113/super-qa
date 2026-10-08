@@ -44,7 +44,6 @@ export class OutpostRun {
   @Column('varchar') autonomyLevel: OutpostAutonomyLevel;
   @Column('text', { nullable: true }) resultSummary: string | null;
   @Column('uuid', { nullable: true }) artifactRequestId: string | null;
-  @Column('uuid', { nullable: true }) chatMessageId: string | null;
   // The Console session this run's finding was seeded into — opening it lets
   // the human continue the conversation with the agent about that finding.
   @Column('uuid', { nullable: true }) sessionId: string | null;

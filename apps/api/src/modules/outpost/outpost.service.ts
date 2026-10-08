@@ -7,8 +7,7 @@ import { In, Repository } from 'typeorm';
 import { randomUUID } from 'crypto';
 import { OutpostActivity, OutpostRun, OutpostAutonomyLevel, OutpostTrigger } from './outpost.entity';
 import { BUILTIN_ACTIVITIES } from './outpost.catalog';
-import { ChatAgent, ChatConversation, ChatMessage } from '../chat/chat.entity';
-import { QaOrgMember } from '../autonomy/identity.entity';
+import { ChatAgent } from '../chat/chat.entity';
 import { AgentsService } from '../agents/agents.service';
 
 export interface CustomActivityInput {
@@ -31,9 +30,6 @@ export class OutpostService implements OnModuleInit {
     @InjectRepository(OutpostActivity) private readonly activities: Repository<OutpostActivity>,
     @InjectRepository(OutpostRun) private readonly runs: Repository<OutpostRun>,
     @InjectRepository(ChatAgent) private readonly chatAgents: Repository<ChatAgent>,
-    @InjectRepository(ChatConversation) private readonly conversations: Repository<ChatConversation>,
-    @InjectRepository(ChatMessage) private readonly messages: Repository<ChatMessage>,
-    @InjectRepository(QaOrgMember) private readonly members: Repository<QaOrgMember>,
     @InjectQueue('outpost') private readonly queue: Queue,
     private readonly agentsService: AgentsService,
     private readonly events: EventEmitter2,
@@ -212,13 +208,11 @@ export class OutpostService implements OnModuleInit {
       if (!this.isNotable(result.status, result.data)) {
         run.status = 'skipped';
       } else {
+        // Seeds a Console session only — Outpost findings surface in the Recent
+        // Activities feed (OutpostPanel) and the Console they link to, never in the
+        // general team Chat. Posting into a shared ChatConversation as well made every
+        // finding show up in everyone's Chat UI indistinguishable from a human message.
         const text = this.describe(activity.name, result.summary, result.status);
-        const conversation = await this.getOrCreateConversation(activity.projectId, agent);
-        const message = await this.messages.save(this.messages.create({
-          projectId: activity.projectId, conversationId: conversation.id, requestId: 'outpost:' + run.id,
-          authorId: agent.id, authorName: agent.name, authorKind: 'agent', text,
-        }));
-        run.chatMessageId = message.id;
         const session = await this.agentsService.seedConsoleSession(agent.kind, text);
         run.sessionId = session.id;
         run.status = 'succeeded';
@@ -250,18 +244,5 @@ export class OutpostService implements OnModuleInit {
   private describe(activityName: string, summary: string, status: string): string {
     const prefix = status === 'completed' ? '' : `[${status}] `;
     return `${prefix}${activityName}: ${summary}`.slice(0, 8000);
-  }
-
-  private async getOrCreateConversation(projectId: string, agent: ChatAgent): Promise<ChatConversation> {
-    const dedupKey = 'outpost:' + agent.id;
-    const existing = await this.conversations.findOneBy({ projectId, dedupKey });
-    if (existing) return existing;
-    const activeMembers = await this.members.find({ where: { projectId, active: true } });
-    const memberIds = activeMembers.map(member => member.id);
-    if (!memberIds.length) throw new Error('Project has no active members to post Outpost findings to');
-    return this.conversations.save(this.conversations.create({
-      projectId, kind: 'group', title: agent.name + ' Outpost', createdBy: memberIds[0],
-      memberIds, agentId: agent.id, agentIds: [agent.id], dedupKey,
-    }));
   }
 }

@@ -3,426 +3,237 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Super QA — Platform Walkthrough</title>
-<meta name="description" content="A scripted, end-to-end walkthrough of the Super QA agent platform for client onboarding and investor demos." />
+<title>superqa — Interactive Product Demo</title>
+<meta name="description" content="Click through the real superqa app — same navigation, same screens — with scripted data standing in for a live backend." />
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
 
-<div class="demo-badge">Scripted walkthrough · All data simulated · No live systems connected</div>
+<div class="demo-badge"><span class="dot"></span> Interactive demo · Scripted data · No live backend</div>
 
-<header class="topbar">
-  <div class="brand"><span class="brand-mark">Q</span> Super QA</div>
-  <div class="topbar-center"><span class="dot"></span> Guided Product Tour</div>
-  <div class="topbar-actions">
-    <button id="btnPlay" class="btn-icon" title="Play / Pause" aria-label="Play or pause"></button>
-    <button id="btnRestart" class="btn-icon" title="Restart tour" aria-label="Restart"></button>
-    <button id="btnContact" class="btn-primary"></button>
-  </div>
-</header>
+<div id="app" class="shell">
+  <div class="shell-body">
 
-<main class="stage-wrap">
-
-  <!-- ===================== SCENE 0 — INTRO ===================== -->
-  <section id="scene-0" class="scene scene-intro active">
-    <div class="hero">
-      <div class="hero-eyebrow"></div>
-      <h1>Watch an AI QA team <span>ship a release</span> — end to end.</h1>
-      <p class="lead">This is a fully scripted, interactive walkthrough of the Super QA platform: autonomous agents that learn your product, generate test coverage, execute, triage failures, and self-heal broken tests — without a human writing a single script.</p>
-      <div class="hero-stats">
-        <div class="hero-stat"><b>80%</b> less manual test authoring</div>
-        <div class="hero-stat"><b>24/7</b> autonomous execution</div>
-        <div class="hero-stat"><b>94%</b> self-healing accuracy</div>
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <button type="button" class="sidebar-logo" id="btnGoHome" title="Home"><span>super</span><span>qa</span></button>
       </div>
-      <div class="hero-actions">
-        <button id="btnPlayTour" class="btn-primary"></button>
-        <button id="btnJumpChapters" class="btn-secondary">Explore chapter by chapter</button>
-      </div>
-      <p class="hero-footnote">~3 minute guided tour · Every screen below is simulated for this walkthrough</p>
-    </div>
-  </section>
+      <button type="button" class="sidebar-collapse-btn" id="btnCollapseSidebar" title="Collapse sidebar">‹</button>
+      <nav class="sidebar-nav" id="sidebarNav" aria-label="Main navigation"></nav>
+    </aside>
 
-  <!-- ===================== SCENE 1 — CONNECT & LEARN ===================== -->
-  <section id="scene-1" class="scene">
-    <div class="app-shell" id="shell-1">
-      <aside class="app-rail">
-        <div class="rail-item active pulse" title="Context Manager">CM</div>
-        <div class="rail-item" title="Test Case Manager">TM</div>
-        <div class="rail-item" title="Executor">EX</div>
-        <div class="rail-item" title="Healer">HL</div>
-      </aside>
-      <div class="app-main">
-        <div class="app-topbar">
-          <span class="crumb">Agents</span><span class="crumb-sep">/</span><span class="crumb">Context Manager</span><span class="crumb-sep">/</span><span class="crumb current">Sources</span>
+    <div class="shell-main">
+      <header class="topbar">
+        <div class="breadcrumb">
+          <span class="workspace">Workspace</span>
+          <svg class="sep" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+          <span class="current" id="breadcrumbCurrent">Home</span>
         </div>
-        <div class="app-content">
-          <div class="panel-title">
-            <h2>Context Sources</h2>
-            <p>Connect the systems that hold your product truth. The Context Manager agent learns continuously as these change.</p>
+        <div class="topbar-actions">
+          <button type="button" class="search-pill" id="btnSearch">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+            <span>Search</span>
+            <kbd>⌘K</kbd>
+          </button>
+          <button type="button" class="toolbar-btn" id="btnTopChat" title="Chat">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+          </button>
+          <button type="button" class="toolbar-btn" id="btnTopCommandCenter" title="Command Center">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="2"/><path d="M12 2a10 10 0 0 1 10 10M12 6a6 6 0 0 1 6 6M12 22A10 10 0 0 1 2 12M12 18a6 6 0 0 1-6-6"/></svg>
+          </button>
+          <button type="button" class="toolbar-btn" id="btnBell" title="Notifications">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+            <span class="toolbar-badge" id="bellBadge">2</span>
+          </button>
+          <button type="button" class="toolbar-btn" id="btnTheme" title="Switch to light mode">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" id="iconMoon"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>
+          </button>
+          <button type="button" class="avatar-btn" id="btnAvatar" title="demo@superqa.dev">DQ</button>
+        </div>
+      </header>
+
+      <main class="content" id="content">
+        <!-- ===================== HOME ===================== -->
+        <section class="view active" data-view="home">
+          <div class="home-hero">
+            <span class="home-eyebrow">AI QA TEAM</span>
+            <h1>See what <span>Super QA</span> can do for you.</h1>
+            <p class="lead">This is the real superqa app shell — same navigation, same screens — walking through the flows that matter most: an agent exploring your live app to design tests, a teammate you can chat with, and a failure that fixes itself. Click anything; everything here responds.</p>
+            <div class="home-stats">
+              <div class="home-stat"><b>80%</b><span>less manual test authoring</span></div>
+              <div class="home-stat"><b>24/7</b><span>autonomous execution</span></div>
+              <div class="home-stat"><b>94%</b><span>self-healing accuracy</span></div>
+            </div>
           </div>
 
-          <div class="source-grid" id="sourceGrid">
-            <div class="source-card" data-source="github">
-              <div class="source-badge badge-github">GH</div>
-              <div class="source-name">GitHub</div>
-              <div class="source-status" data-status>Not connected</div>
-            </div>
-            <div class="source-card" data-source="jira">
-              <div class="source-badge badge-jira">JR</div>
-              <div class="source-name">Jira</div>
-              <div class="source-status" data-status>Not connected</div>
-            </div>
-            <div class="source-card" data-source="confluence">
-              <div class="source-badge badge-confluence">CF</div>
-              <div class="source-name">Confluence</div>
-              <div class="source-status" data-status>Not connected</div>
-            </div>
-            <div class="source-card" data-source="zephyr">
-              <div class="source-badge badge-zephyr">ZP</div>
-              <div class="source-name">Zephyr</div>
-              <div class="source-status" data-status>Not connected</div>
-            </div>
+          <div class="flow-grid">
+            <button type="button" class="flow-card" data-launch="flow-explore">
+              <span class="flow-icon" style="background:var(--accent-blue-soft);color:var(--accent-blue)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M14.5 9.5l-2 5-3 1.5 2-5 3-1.5z"/></svg></span>
+              <h3>Generate tests from a live exploration</h3>
+              <p>Point Alex at a real environment. Watch the browser navigate it live, then review the test cases it designed from what it actually saw — pause or stop anytime and generate from what's gathered so far.</p>
+              <span class="flow-cta">Try it <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+            </button>
+            <button type="button" class="flow-card" data-launch="flow-chat">
+              <span class="flow-icon" style="background:var(--info-soft);color:var(--info)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="9" width="16" height="11" rx="3"/><path d="M12 9V5"/><circle cx="12" cy="4" r="1.3" fill="currentColor"/><circle cx="9" cy="14.5" r="1.3" fill="currentColor"/><circle cx="15" cy="14.5" r="1.3" fill="currentColor"/></svg></span>
+              <h3>Chat with Alex, your QA Engineer</h3>
+              <p>Ask about coverage gaps, flaky tests, or what to test next — in a console built like a terminal, not a toy chatbot. Alex also works proactively and surfaces what it finds, unprompted.</p>
+              <span class="flow-cta">Open console <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+            </button>
+            <button type="button" class="flow-card" data-launch="flow-heal">
+              <span class="flow-icon" style="background:var(--danger-soft);color:var(--danger)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z"/></svg></span>
+              <h3>A failure that fixes itself</h3>
+              <p>A test fails after a UI change. See the AI root-cause analysis, the self-healing locator fix it proposes, and the pull request it opens the moment a human approves it.</p>
+              <span class="flow-cta">Investigate <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+            </button>
           </div>
 
-          <div class="facts-feed">
-            <h3>Knowledge extraction</h3>
-            <div class="facts-list" id="factsList"></div>
+          <div class="home-section">
+            <h2>Everything else, in one workspace</h2>
+            <div class="quicklink-grid">
+              <button type="button" class="quicklink" data-view-link="test-cases"><span class="icon-box" style="width:30px;height:30px;background:var(--accent-blue-soft);color:var(--accent-blue)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 2v8.5L4.5 18a3 3 0 0 0 2.6 4.5h9.8a3 3 0 0 0 2.6-4.5L15 10.5V2"/><path d="M9 2h6"/><path d="M7 16h10"/></svg></span>Test cases</button>
+              <button type="button" class="quicklink" data-view-link="executions"><span class="icon-box" style="width:30px;height:30px;background:var(--success-soft);color:var(--success)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.3 2.3 4.7-5.1"/></svg></span>Executions</button>
+              <button type="button" class="quicklink" data-view-link="environments"><span class="icon-box" style="width:30px;height:30px;background:var(--info-soft);color:var(--info)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/><circle cx="7" cy="7" r=".8" fill="currentColor"/><circle cx="7" cy="17" r=".8" fill="currentColor"/></svg></span>Environments</button>
+              <button type="button" class="quicklink" data-view-link="coverage"><span class="icon-box" style="width:30px;height:30px;background:var(--accent-purple-soft);color:var(--accent-purple)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg></span>Coverage</button>
+              <button type="button" class="quicklink" data-view-link="defects"><span class="icon-box" style="width:30px;height:30px;background:var(--danger-soft);color:var(--danger)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="8" y="8" width="8" height="10" rx="4"/><path d="M8 11H5M19 11h-3M8 15H5M19 15h-3M10 8V6a2 2 0 0 1 4 0v2"/></svg></span>Defects</button>
+              <button type="button" class="quicklink" data-view-link="reports"><span class="icon-box" style="width:30px;height:30px;background:var(--warning-soft);color:var(--warning)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg></span>Reports</button>
+            </div>
           </div>
+        </section>
 
-          <div class="clarify-card hidden" id="clarifyCard">
-            <div class="clarify-avatar">AI</div>
-            <div class="clarify-body">
-              <p class="clarify-question">I found multiple login flows across Jira epics and Playwright specs. Which should become the canonical <b>Authentication / Login</b> flow?</p>
-              <div class="evidence-row">
-                <span class="evidence-chip">Confluence · Auth Requirements</span>
-                <span class="evidence-chip">Jira · AUTH-214</span>
-                <span class="evidence-chip">Playwright · login.spec.ts</span>
+        <!-- ===================== TEST CASES ===================== -->
+        <section class="view" data-view="test-cases">
+          <div class="page-pad">
+            <div class="page-head">
+              <div>
+                <h1>Test Cases</h1>
+                <p>Every case your team and Alex have designed, ready to run or refine.</p>
               </div>
-              <div class="clarify-actions" id="clarifyActions">
-                <button class="chip-btn" data-choice="accept">Accept</button>
-                <button class="chip-btn" data-choice="merge">Merge</button>
-                <button class="chip-btn" data-choice="answer">Answer</button>
+              <div style="display:flex;gap:8px;flex:none">
+                <button type="button" class="btn btn-secondary" id="btnNewCase">New case</button>
+                <button type="button" class="btn btn-primary" id="btnGenerateAI">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.9 4.9L19 9l-5.1 1.9L12 16l-1.9-4.9L5 10l5.1-1.9L12 3z"/></svg>
+                  Generate with AI
+                </button>
               </div>
-              <div class="clarify-result hidden" id="clarifyResult"></div>
+            </div>
+            <div class="card card-pad">
+              <div class="tc-list" id="testCaseList"></div>
             </div>
           </div>
-        </div>
-      </div>
+        </section>
+
+        <!-- ===================== EXECUTIONS ===================== -->
+        <section class="view" data-view="executions">
+          <div class="page-pad">
+            <div class="page-head">
+              <div><h1>Executions</h1><p>Manual and agent-driven run outcomes across your environments.</p></div>
+            </div>
+            <div class="kpi-grid" style="margin-bottom:18px">
+              <div class="kpi-card"><div class="label">Passed (7d)</div><div class="value" style="color:var(--success)">142</div></div>
+              <div class="kpi-card"><div class="label">Failed (7d)</div><div class="value" style="color:var(--danger)">6</div></div>
+              <div class="kpi-card"><div class="label">Avg. duration</div><div class="value">48s</div></div>
+              <div class="kpi-card"><div class="label">Self-healed</div><div class="value" style="color:var(--accent-blue)">4</div></div>
+            </div>
+            <div class="card card-pad">
+              <div id="executionList"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===================== ENVIRONMENTS ===================== -->
+        <section class="view" data-view="environments">
+          <div class="page-pad">
+            <div class="page-head"><div><h1>Environments</h1><p>Where Alex explores and your suite executes.</p></div></div>
+            <div class="card card-pad"><div id="environmentList"></div></div>
+          </div>
+        </section>
+
+        <!-- ===================== AGENT CONSOLE (Alex / Jordan) ===================== -->
+        <section class="view" data-view="agent-console">
+          <div class="console-shell">
+            <div class="console-tabs">
+              <button type="button" class="console-tab active" data-console-tab="console">Console</button>
+              <button type="button" class="console-tab" data-console-tab="outpost">Outpost</button>
+            </div>
+            <div id="consoleTabConsole">
+              <div class="console-log" id="consoleLog"></div>
+              <div class="console-composer">
+                <div class="console-quick" id="consoleQuick"></div>
+                <div class="console-input-row">
+                  <textarea id="consoleInput" rows="1" placeholder="Ask your agent anything…"></textarea>
+                  <button type="button" class="btn btn-primary" id="btnConsoleSend">Send</button>
+                </div>
+              </div>
+            </div>
+            <div id="consoleTabOutpost" class="hidden" style="flex:1;overflow-y:auto;padding:22px 28px">
+              <div style="max-width:760px;margin:0 auto">
+                <h2 style="font-size:15px;margin:0 0 4px">Recent Activities</h2>
+                <p style="font-size:12.5px;color:var(--text-secondary);margin:0 0 16px">What this agent noticed on its own, most recent first. Open a run's Console session to keep the conversation going.</p>
+                <div id="outpostList"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </main>
     </div>
-  </section>
-
-  <!-- ===================== SCENE 2 — GENERATE COVERAGE ===================== -->
-  <section id="scene-2" class="scene">
-    <div class="app-shell">
-      <aside class="app-rail">
-        <div class="rail-item" title="Context Manager">CM</div>
-        <div class="rail-item active pulse" title="Test Case Manager">TM</div>
-        <div class="rail-item" title="Executor">EX</div>
-        <div class="rail-item" title="Healer">HL</div>
-      </aside>
-      <div class="app-main">
-        <div class="app-topbar">
-          <span class="crumb">Agents</span><span class="crumb-sep">/</span><span class="crumb">Test Case Manager</span><span class="crumb-sep">/</span><span class="crumb current">Coverage Analysis</span>
-        </div>
-        <div class="app-content">
-          <div class="panel-title-row">
-            <div class="panel-title">
-              <h2>Coverage Analysis</h2>
-              <p>Gap analysis highlights Checkout / Payment as high risk with 42% automation.</p>
-            </div>
-            <button class="btn-primary" id="btnGenerateTests"></button>
-          </div>
-
-          <div class="coverage-grid" id="coverageGrid">
-            <div class="coverage-row">
-              <div class="coverage-area">Authentication</div>
-              <div class="coverage-bar-track"><div class="coverage-bar-fill" data-target="88"></div></div>
-              <div class="coverage-pct" data-pct>0%</div>
-              <div class="risk-pill risk-low">Low</div>
-            </div>
-            <div class="coverage-row highlight" id="rowCheckoutPayment">
-              <div class="coverage-area">Checkout / Payment</div>
-              <div class="coverage-bar-track"><div class="coverage-bar-fill" data-target="42"></div></div>
-              <div class="coverage-pct" data-pct>0%</div>
-              <div class="risk-pill risk-high">High</div>
-            </div>
-            <div class="coverage-row">
-              <div class="coverage-area">Checkout / Confirmation</div>
-              <div class="coverage-bar-track"><div class="coverage-bar-fill" data-target="77"></div></div>
-              <div class="coverage-pct" data-pct>0%</div>
-              <div class="risk-pill risk-med">Medium</div>
-            </div>
-            <div class="coverage-row">
-              <div class="coverage-area">Account Settings</div>
-              <div class="coverage-bar-track"><div class="coverage-bar-fill" data-target="91"></div></div>
-              <div class="coverage-pct" data-pct>0%</div>
-              <div class="risk-pill risk-low">Low</div>
-            </div>
-          </div>
-
-          <div class="gen-plan hidden" id="genPlan">
-            <div class="gen-plan-title"></div>
-            <div class="gen-plan-refs">
-              <span class="ref-chip">Flow · Checkout / Payment</span>
-              <span class="ref-chip">Fact · Locked account cannot checkout</span>
-              <span class="ref-chip">Action · enterCardDetails()</span>
-              <span class="ref-chip">Data Setup · Declined test card</span>
-            </div>
-          </div>
-
-          <div class="tc-list" id="tcList"></div>
-
-          <div class="toast-stack" id="toastStack2"></div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ===================== SCENE 3 — EXECUTE ===================== -->
-  <section id="scene-3" class="scene">
-    <div class="app-shell">
-      <aside class="app-rail">
-        <div class="rail-item" title="Context Manager">CM</div>
-        <div class="rail-item" title="Test Case Manager">TM</div>
-        <div class="rail-item active pulse" title="Executor">EX</div>
-        <div class="rail-item" title="Healer">HL</div>
-      </aside>
-      <div class="app-main">
-        <div class="app-topbar">
-          <span class="crumb">Agents</span><span class="crumb-sep">/</span><span class="crumb">Executor</span><span class="crumb-sep">/</span><span class="crumb current">Executions</span>
-        </div>
-        <div class="app-content">
-          <div class="panel-title-row">
-            <div class="panel-title">
-              <h2>Executions</h2>
-              <p>Execution #14 · Staging · Chrome, Firefox, WebKit</p>
-            </div>
-            <button class="btn-primary" id="btnRunSuite"></button>
-          </div>
-
-          <div class="env-pills">
-            <span class="env-pill active">Staging</span>
-            <span class="env-pill">Production</span>
-            <span class="env-pill">Preview</span>
-          </div>
-
-          <div class="kpi-row" style="margin-top:16px;">
-            <div class="kpi-card"><div class="kpi-label">Passed</div><div class="kpi-value v-passed" id="kpiPassed">0</div></div>
-            <div class="kpi-card"><div class="kpi-label">Failed</div><div class="kpi-value v-failed" id="kpiFailed">0</div></div>
-            <div class="kpi-card"><div class="kpi-label">Running</div><div class="kpi-value v-running" id="kpiRunning">0</div></div>
-            <div class="kpi-card"><div class="kpi-label">Duration</div><div class="kpi-value" id="kpiDuration">0:00</div></div>
-            <div class="kpi-card"><div class="kpi-label">AI Confidence</div><div class="kpi-value" id="kpiConfidence">—</div></div>
-          </div>
-
-          <div class="exec-table" id="execTable"></div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ===================== SCENE 4 — INVESTIGATE & EXPLAIN ===================== -->
-  <section id="scene-4" class="scene">
-    <div class="app-shell with-inspector" id="shell-4">
-      <aside class="app-rail">
-        <div class="rail-item" title="Context Manager">CM</div>
-        <div class="rail-item" title="Test Case Manager">TM</div>
-        <div class="rail-item active pulse" title="Executor">EX</div>
-        <div class="rail-item" title="Healer">HL</div>
-      </aside>
-      <div class="app-main">
-        <div class="app-topbar">
-          <span class="crumb">Executor</span><span class="crumb-sep">/</span><span class="crumb">Execution #14</span><span class="crumb-sep">/</span><span class="crumb current">Run #1</span>
-        </div>
-        <div class="app-content">
-          <div class="panel-title">
-            <h2>TC-1042 · Payment decline shows banner</h2>
-            <p>Checkout / Payment · Chrome · Staging · 48s · Retry 1</p>
-          </div>
-          <div class="exec-table">
-            <div class="exec-row is-selected">
-              <svg class="row-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/></svg>
-              <div class="tname">TC-1042 Payment decline shows banner</div>
-              <div class="tflow">Checkout / Payment</div>
-              <span class="status-pill st-failed"><span class="dot-solid"></span>Failed</span>
-              <div class="tduration">48s</div>
-              <div class="towner">Maya Chen</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="inspector">
-        <div class="inspector-header">
-          <div class="inspector-kicker">Test Case</div>
-          <div class="inspector-title">TC-1042 · Payment decline shows banner</div>
-          <div class="inspector-tabs">
-            <span class="inspector-tab">Overview</span>
-            <span class="inspector-tab active">AI Analysis</span>
-            <span class="inspector-tab">Screenshots</span>
-            <span class="inspector-tab">Network</span>
-            <span class="inspector-tab">Console</span>
-          </div>
-        </div>
-        <div class="inspector-body">
-          <div class="ai-stream">
-            <div class="ai-stream-head"></div>
-            <span class="ai-stream-text" id="aiStreamText"></span>
-            <div class="evidence-strip hidden" id="evidenceStrip">
-              <span class="evidence-thumb">📸 Screenshot · decline-banner.png</span>
-              <span class="evidence-thumb">🌐 Network · POST /payments → 500</span>
-            </div>
-          </div>
-          <div class="related-list hidden" id="relatedList">
-            <div class="related-item"><span>Similar failure · TC-0991</span><span>14 days ago</span></div>
-            <div class="related-item"><span>Similar failure · TC-1077</span><span>22 days ago</span></div>
-            <div class="related-item"><span>Similar failure · TC-1042 (prior run)</span><span>41 days ago</span></div>
-          </div>
-        </div>
-        <div class="inspector-footer">
-          <button class="btn-primary" id="btnCreateHealing" style="flex:1" disabled>Create healing suggestion</button>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ===================== SCENE 5 — SELF-HEAL ===================== -->
-  <section id="scene-5" class="scene">
-    <div class="app-shell">
-      <aside class="app-rail">
-        <div class="rail-item" title="Context Manager">CM</div>
-        <div class="rail-item" title="Test Case Manager">TM</div>
-        <div class="rail-item" title="Executor">EX</div>
-        <div class="rail-item active pulse" title="Healer">HL</div>
-      </aside>
-      <div class="app-main" style="position:relative;">
-        <div class="app-topbar">
-          <span class="crumb">Agents</span><span class="crumb-sep">/</span><span class="crumb">Healer</span><span class="crumb-sep">/</span><span class="crumb current">Healing Queue</span>
-        </div>
-        <div class="app-content">
-          <div class="panel-title">
-            <h2>Healing Queue</h2>
-            <p>A locator broke after a UI change. The Healer agent proposes a resilient replacement.</p>
-          </div>
-
-          <div class="heal-queue-row hidden" id="healRow">
-            <div class="heal-issue">
-              <code>button[data-testid="pay-now"]</code> not found
-              <div class="small">Affects 12 tests · First seen in Run #1</div>
-            </div>
-            <div class="confidence-pill">94%</div>
-            <div class="risk-pill risk-low">Low</div>
-            <div style="text-align:right;color:var(--text-secondary);font-size:11px;">now</div>
-          </div>
-
-          <div class="confidence-banner hidden" id="confBanner">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-            <span>Root cause: button label changed from "Pay now" to "Pay now · secure". The <b>testid</b> locator is stale; the accessible role &amp; name are not.</span>
-          </div>
-
-          <div class="diff-viewer hidden" id="diffViewer">
-            <div class="diff-header"><span>Suggested locator change</span><span>action: checkoutPage.payNowButton</span></div>
-            <div class="diff-line removed"><span class="diff-marker">−</span><span>page.locator('[data-testid="pay-now"]')</span></div>
-            <div class="diff-line added"><span class="diff-marker">+</span><span>page.getByRole('button', { name: 'Pay now' })</span></div>
-          </div>
-
-          <div class="clarify-actions hidden" id="healActions">
-            <button class="chip-btn" data-choice="reject">Reject</button>
-            <button class="chip-btn chip-primary" data-choice="approve">Approve</button>
-          </div>
-
-          <div class="apply-modal" id="applyModal">
-            <div class="apply-modal-card">
-              <h4>Apply healing suggestion</h4>
-              <p>Where should this corrected locator be applied?</p>
-              <div class="apply-option" id="optCurrent">Apply to current test only</div>
-              <div class="apply-option" id="optShared">Apply to shared action library <span style="color:var(--text-secondary);font-weight:400;">· 12 tests</span></div>
-            </div>
-          </div>
-
-          <div class="toast-stack" id="toastStack5"></div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ===================== SCENE 6 — SHIP IT / RECAP ===================== -->
-  <section id="scene-6" class="scene">
-    <div class="app-content" style="max-width:1040px;margin:0 auto;padding-top:4px;">
-      <div class="panel-title" style="text-align:center;margin:0 auto 24px;max-width:600px;">
-        <h2 style="font-size:24px;">Shipped — fully autonomously</h2>
-        <p style="margin:6px auto 0;">The healing PR merged, coverage went up, and your release stayed on schedule.</p>
-      </div>
-
-      <div class="pr-card" id="prCard">
-        <div class="pr-icon">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="9" r="2.5"/><path d="M6 8.5V18M6 9c0 4 4 4.5 8 4.5M18 11.5V9"/></svg>
-        </div>
-        <div class="pr-body">
-          <div class="pr-title">fix(locator): heal pay-now button selector</div>
-          <div class="pr-meta"><span>Author: Healer Agent</span><span>Reviewer: Maya Chen</span><span>12 tests changed</span></div>
-        </div>
-        <div class="pr-checks" id="prChecks"><span id="prChecksLabel">3 checks pending</span></div>
-        <div class="pr-status-pill" id="prStatusPill">Open</div>
-      </div>
-
-      <div class="section-label">Dashboard — Quality Command Center</div>
-      <div class="recap-grid" id="recapGrid">
-        <div class="recap-card"><div class="recap-label">Passed</div><div class="recap-value" data-count="1284">0</div><div class="recap-delta up">+8.2%</div></div>
-        <div class="recap-card"><div class="recap-label">Failed</div><div class="recap-value" data-count="37">0</div><div class="recap-delta up">−12.4%</div></div>
-        <div class="recap-card"><div class="recap-label">AI Confidence</div><div class="recap-value" data-count="91" data-suffix="%">0%</div><div class="recap-delta up">+3%</div></div>
-        <div class="recap-card"><div class="recap-label">Healing Count</div><div class="recap-value" data-count="22">0</div><div class="recap-delta warn">5 pending</div></div>
-        <div class="recap-card"><div class="recap-label">Coverage</div><div class="recap-value" data-count="81" data-suffix="%">0%</div><div class="recap-delta up">+39 pts</div></div>
-      </div>
-
-      <div class="recap-summary">
-        <h3>What just happened — without a human writing a single script</h3>
-        <ul id="recapList">
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>Connected 4 sources and resolved a flow ambiguity autonomously</li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>Generated 6 new regression tests straight from real requirements</li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>Executed the full suite across 3 environments and 3 browsers</li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>Diagnosed a production-breaking failure in under a minute</li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>Opened and merged a self-healing pull request</li>
-        </ul>
-
-        <div class="recap-cta">
-          <p>This was a scripted walkthrough. Your product's real agents work the same way, on your real data.</p>
-          <div class="recap-cta-actions">
-            <button class="btn-secondary" id="btnRestart2"></button>
-            <button class="btn-primary" id="btnContact2"></button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-</main>
-
-<footer class="rail-footer">
-  <div class="caption-line"><span class="live-dot"></span><span id="captionText">Press play to start the guided tour.</span></div>
-  <div class="chapters" id="chapters"></div>
-  <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
-</footer>
-
-<div id="contactModal" class="modal-backdrop hidden">
-  <div class="modal" id="contactModalCard">
-    <h3>Book a working session</h3>
-    <p class="modal-desc">This demo is fully scripted. Tell us a bit about your team and we'll show Super QA working against your real product.</p>
-    <form id="contactForm">
-      <label for="cf-name">Name</label>
-      <input id="cf-name" type="text" placeholder="Jane Doe" required />
-      <label for="cf-email">Work email</label>
-      <input id="cf-email" type="email" placeholder="jane@company.com" required />
-      <label for="cf-note">What would you like to see?</label>
-      <textarea id="cf-note" rows="3" placeholder="e.g. our checkout flow, Jira + Confluence integration..."></textarea>
-      <div class="modal-actions">
-        <button type="button" class="btn-secondary" id="btnCloseModal">Cancel</button>
-        <button type="submit" class="btn-primary">Request session</button>
-      </div>
-    </form>
   </div>
 </div>
+
+<!-- ===================== GENERATE WIZARD MODAL ===================== -->
+<div class="modal-scrim hidden" id="wizardScrim">
+  <div class="modal-panel" id="wizardPanel">
+    <div class="modal-head">
+      <h2 id="wizardTitle">Generate test cases</h2>
+      <button type="button" class="modal-close" id="btnWizardClose">✕</button>
+    </div>
+    <div class="modal-body" id="wizardBody"></div>
+    <div class="modal-foot" id="wizardFoot"></div>
+  </div>
+</div>
+
+<!-- ===================== FULL-SCREEN EXPLORATION LIVE VIEWER ===================== -->
+<div class="modal-scrim hidden" id="exploreScrim">
+  <div class="modal-panel full" style="display:flex;flex-direction:column">
+    <div class="explore-head">
+      <span class="live-dot on" id="exploreDot"></span>
+      <strong id="exploreAgentName">Alex</strong>
+      <span class="status" id="exploreStatus">Starting…</span>
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-secondary btn-sm" id="btnExplorePause">Pause</button>
+      <button type="button" class="btn btn-secondary btn-sm" id="btnExploreStop">Stop</button>
+    </div>
+    <div class="explore-body">
+      <div class="explore-steps" id="exploreStepsPanel">
+        <div class="explore-steps-label">WHAT ALEX IS DOING</div>
+        <div id="exploreConfirmSlot"></div>
+        <div id="exploreSteps"></div>
+      </div>
+      <div class="explore-browser">
+        <div class="explore-browser-label">BROWSER</div>
+        <div class="explore-frame-wrap" id="exploreFrameWrap">
+          <div class="explore-waiting" id="exploreWaiting"><span class="spin"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a9 9 0 1 0 9 9" stroke-linecap="round"/></svg></span> Waiting for the first page…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== EXECUTION DETAIL / HEALING MODAL ===================== -->
+<div class="modal-scrim hidden" id="execScrim">
+  <div class="modal-panel wide">
+    <div class="modal-head">
+      <h2 id="execModalTitle">Execution detail</h2>
+      <button type="button" class="modal-close" id="btnExecClose">✕</button>
+    </div>
+    <div class="modal-body" id="execModalBody"></div>
+    <div class="modal-foot" id="execModalFoot"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
 
 <script src="app.js"></script>
 </body>

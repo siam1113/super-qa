@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { saveTestCase } from '@/lib/testCaseFields';
 import type { TestCase } from '@/lib/types';
 import { RunsPanel, useUnreviewedRunCount } from './RunsPanel';
+import { useAgentNames } from '@/hooks/useAgentNames';
 
 const ROOT = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -31,6 +32,7 @@ export function RefineTestCaseWizardModal({
   const [phase, setPhase] = useState<Phase>('source');
   const [viewingRuns, setViewingRuns] = useState(false);
   const unreviewedRuns = useUnreviewedRunCount('refine');
+  const { qae } = useAgentNames();
 
   const [query, setQuery] = useState('');
   const [selectedCase, setSelectedCase] = useState<TestCase | null>(null);
@@ -81,11 +83,11 @@ export function RefineTestCaseWizardModal({
         body: JSON.stringify(buildRequestBody()),
       });
       const data = await readJson(response);
-      if (!response.ok) throw new Error(data.message || 'QAE could not refine this test case');
+      if (!response.ok) throw new Error(data.message || `${qae.name} could not refine this test case`);
       setProposal(data as RefinedCase);
       setPhase('review');
     } catch (reason) {
-      setRefineError(reason instanceof Error ? reason.message : 'QAE could not refine this test case');
+      setRefineError(reason instanceof Error ? reason.message : `${qae.name} could not refine this test case`);
       setPhase('review');
     }
   };
@@ -158,7 +160,7 @@ export function RefineTestCaseWizardModal({
               {!viewingRuns && phase === 'pick' && origin === 'platform' && 'Select the case to refine.'}
               {!viewingRuns && phase === 'pick' && origin === 'external' && 'Describe the test from the external tool.'}
               {!viewingRuns && phase === 'details' && 'What should change, and any references to use.'}
-              {!viewingRuns && phase === 'refining' && 'QAE is refining the test case…'}
+              {!viewingRuns && phase === 'refining' && `${qae.name} is refining the test case…`}
               {!viewingRuns && phase === 'review' && 'Review the refined case before applying it.'}
             </p>
           </div>
@@ -265,7 +267,7 @@ export function RefineTestCaseWizardModal({
             {phase === 'refining' && (
               <div className="motion-safe:animate-fade-in flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
                 <Loader2 size={28} className="animate-spin text-accent-purple"/>
-                <p className="text-sm font-medium">QAE is refining the test case…</p>
+                <p className="text-sm font-medium">{qae.name} is refining the test case…</p>
               </div>
             )}
 

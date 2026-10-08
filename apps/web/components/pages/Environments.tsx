@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import type { Environment, EnvironmentVariable } from '@/lib/types';
+import { useAgentNames } from '@/hooks/useAgentNames';
 import {
   Plus,
   Search,
@@ -343,6 +344,7 @@ function EnvironmentCard({
   const [editingName, setEditingName] = useState(false);
   const [name, setName] = useState(env.name);
   const [showMenu, setShowMenu] = useState(false);
+  const { qae } = useAgentNames();
 
   const handleUpdateVariable = (key: string, updates: Partial<EnvironmentVariable>) => {
     onUpdateVariable(env.id, key, updates);
@@ -474,7 +476,7 @@ function EnvironmentCard({
         <div className="px-4 pb-4 border-t border-border pt-4 space-y-2">
           <p className="text-xs font-medium text-text-secondary">Base URL</p>
           <BaseUrlRow env={env} onUpdate={onUpdate} />
-          <p className="pt-2 text-xs font-medium text-text-secondary">QAE test retry policy</p>
+          <p className="pt-2 text-xs font-medium text-text-secondary">{qae.name} test retry policy</p>
           <RetryPolicyRow env={env} onUpdate={onUpdate} />
           <p className="pt-2 text-xs font-medium text-text-secondary">Variables</p>
           {env.variables.length === 0 ? (

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { CheckCircle2, Loader2, PlayCircle, XCircle } from 'lucide-react';
 import { request, OnboardingTestCase } from '../api';
+import { useAgentNames } from '@/hooks/useAgentNames';
 
 type RunStatus = 'pending' | 'running' | 'passed' | 'failed' | 'error';
 
@@ -10,6 +11,7 @@ export function ExecuteTestsStep({ testCases, onDone }: { testCases: OnboardingT
   const [statuses, setStatuses] = useState<Record<string, RunStatus>>(() => Object.fromEntries(testCases.map(testCase => [testCase.id, 'pending'])));
   const [running, setRunning] = useState(false);
   const [done, setDone] = useState(false);
+  const { qae } = useAgentNames();
 
   async function runAll() {
     setRunning(true);
@@ -37,7 +39,7 @@ export function ExecuteTestsStep({ testCases, onDone }: { testCases: OnboardingT
     : <span className="h-4 w-4 rounded-full border border-border" />;
 
   return <div className="space-y-4">
-    <div><h2 className="text-lg font-semibold">Run the tests</h2><p className="mt-1 text-sm text-text-secondary">QAE will drive a real browser through each test case.</p></div>
+    <div><h2 className="text-lg font-semibold">Run the tests</h2><p className="mt-1 text-sm text-text-secondary">{qae.name} will drive a real browser through each test case.</p></div>
     <ul className="space-y-2">
       {testCases.map(testCase => <li key={testCase.id} className="flex items-center gap-3 rounded-lg border border-border p-3">{icon(statuses[testCase.id])}<span className="min-w-0 flex-1 truncate text-sm font-medium">{testCase.title}</span></li>)}
     </ul>

@@ -4,8 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useAppStore, type ContextCounts } from '@/lib/store';
 import type { Page } from '@/lib/types';
-import { chatRequest, type ChatAgent, type Directory } from '@/lib/chat';
 import { getAgentAvatar } from '@/lib/agent-avatars';
+import { useAgentNames } from '@/hooks/useAgentNames';
 import {
   Bot,
   Box,
@@ -46,9 +46,6 @@ type Navigation = {
   app: NavSection[];
 };
 
-type AgentKind = ChatAgent['kind'];
-type AgentNavProfiles = Record<AgentKind, { name: string; avatar: string | null }>;
-
 function AgentNavIcon({ avatar, tone }: { avatar: string | null; tone: string }) {
   const selected = getAgentAvatar(avatar);
   return selected
@@ -56,7 +53,7 @@ function AgentNavIcon({ avatar, tone }: { avatar: string | null; tone: string })
     : <Bot size={14} className={tone} />;
 }
 
-function buildNavigation(counts: ContextCounts, agents: AgentNavProfiles): Navigation {
+function buildNavigation(counts: ContextCounts, agents: ReturnType<typeof useAgentNames>): Navigation {
   return {
     organization: [
       {
@@ -191,10 +188,7 @@ function NavItem({ item, depth = 0 }: { item: NavSection; depth?: number }) {
 export function Sidebar() {
   const { sidebarCollapsed, toggleSidebar, contextCounts, currentPage, setCurrentPage } = useAppStore();
   const [isOrganizationAdmin, setIsOrganizationAdmin] = useState(false);
-  const [agentProfiles, setAgentProfiles] = useState<AgentNavProfiles>({
-    qae: { name: 'QAE', avatar: null },
-    aue: { name: 'AUE', avatar: null },
-  });
+  const agentProfiles = useAgentNames();
   const navigation = useMemo(() => buildNavigation(contextCounts, agentProfiles), [contextCounts, agentProfiles]);
 
   useEffect(() => {
@@ -206,23 +200,6 @@ export function Sidebar() {
       })
       .catch(() => { if (active) setIsOrganizationAdmin(false); });
     return () => { active = false; };
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    const applyAgent = (agent: ChatAgent) => setAgentProfiles(previous => ({
-      ...previous,
-      [agent.kind]: { name: agent.name, avatar: agent.avatar },
-    }));
-    void chatRequest<Directory>('/directory').then(directory => {
-      if (active) directory.agents.forEach(applyAgent);
-    }).catch(() => undefined);
-    const handleProfileUpdate = (event: Event) => applyAgent((event as CustomEvent<ChatAgent>).detail);
-    window.addEventListener('agent-profile-updated', handleProfileUpdate);
-    return () => {
-      active = false;
-      window.removeEventListener('agent-profile-updated', handleProfileUpdate);
-    };
   }, []);
 
   return (

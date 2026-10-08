@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { Radio, Loader2, MessageCircleQuestion } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLiveExecution, answerLiveQuestion } from '@/lib/live-execution';
+import { useAgentNames } from '@/hooks/useAgentNames';
 
 const QUESTION_TIMEOUT_SECONDS = 30;
 
@@ -13,6 +14,7 @@ function QuestionPanel({ runId, questionId, prompt }: { runId: string; questionI
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(QUESTION_TIMEOUT_SECONDS);
+  const { qae } = useAgentNames();
 
   // Resets whenever a new question comes in (keyed by questionId at the call site).
   useEffect(() => {
@@ -40,7 +42,7 @@ function QuestionPanel({ runId, questionId, prompt }: { runId: string; questionI
     <div className="flex-none rounded-lg border border-accent-purple/40 bg-accent-purple/5 p-3">
       <div className="flex items-center gap-2 text-xs font-semibold text-accent-purple">
         <MessageCircleQuestion size={14}/>
-        QAE needs guidance
+        {qae.name} needs guidance
         <span className="ml-auto font-mono text-[11px] font-normal text-text-secondary">
           {sent ? 'sent' : `${secondsLeft}s`}
         </span>
@@ -68,6 +70,7 @@ function QuestionPanel({ runId, questionId, prompt }: { runId: string; questionI
 
 export function ExplorationLiveViewer({ runId }: { runId: string }) {
   const live = useLiveExecution(runId);
+  const { qae } = useAgentNames();
 
   if (typeof document === 'undefined') return null;
 
@@ -79,7 +82,7 @@ export function ExplorationLiveViewer({ runId }: { runId: string }) {
       >
         <div className="flex flex-none items-center gap-2.5 border-b border-border px-4 py-2.5 text-sm">
           <Radio size={14} className={live.connection === 'open' ? 'text-success' : 'text-text-secondary'}/>
-          <span className="font-semibold text-text-primary">QAE is exploring the app</span>
+          <span className="font-semibold text-text-primary">{qae.name} is exploring the app</span>
           <span className="text-xs text-text-secondary">
             {live.connection === 'connecting' && 'Connecting…'}
             {live.connection === 'open' && (live.steps.length === 0 ? 'Starting…' : `Visited ${live.steps.length} page${live.steps.length === 1 ? '' : 's'} so far`)}
@@ -90,7 +93,7 @@ export function ExplorationLiveViewer({ runId }: { runId: string }) {
 
         <div className="flex min-h-0 flex-1">
           <div className="flex w-[26rem] flex-none flex-col gap-2 overflow-y-auto border-r border-border p-3">
-            <p className="flex-none text-xs font-semibold text-text-secondary">WHAT QAE IS DOING</p>
+            <p className="flex-none text-xs font-semibold text-text-secondary">WHAT {qae.name.toUpperCase()} IS DOING</p>
             {live.pendingQuestion && (
               <QuestionPanel runId={runId} questionId={live.pendingQuestion.questionId} prompt={live.pendingQuestion.prompt}/>
             )}

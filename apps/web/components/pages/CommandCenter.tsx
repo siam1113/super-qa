@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import type { AgentTask, AgentType, TaskStatus, TaskPriority } from '@/lib/types';
+import { useAgentNames } from '@/hooks/useAgentNames';
 import {
   LayoutDashboard,
   ListTodo,
@@ -117,9 +118,10 @@ function PriorityBadge({ priority }: { priority: TaskPriority }) {
 
 // Agent Badge Component
 function AgentBadge({ agentType }: { agentType: AgentType }) {
+  const agentNames = useAgentNames();
   const config: Record<AgentType, { label: string; color: string; bg: string }> = {
-    qae: { label: 'QAE', color: 'text-accent-blue', bg: 'bg-accent-blue/10' },
-    aue: { label: 'AUE', color: 'text-accent-purple', bg: 'bg-accent-purple/10' },
+    qae: { label: agentNames.qae.name, color: 'text-accent-blue', bg: 'bg-accent-blue/10' },
+    aue: { label: agentNames.aue.name, color: 'text-accent-purple', bg: 'bg-accent-purple/10' },
     superqa: { label: 'SQA', color: 'text-warning', bg: 'bg-warning/10' },
   };
   const { label, color, bg } = config[agentType];
@@ -132,6 +134,7 @@ function AgentBadge({ agentType }: { agentType: AgentType }) {
 
 // Dashboard Tab
 function DashboardTab({ tasks, sessions }: { tasks: AgentTask[]; sessions: any[] }) {
+  const agentNames = useAgentNames();
   const stats = {
     totalTasks: tasks.length,
     inProgress: tasks.filter(t => t.status === 'in_progress').length,
@@ -230,7 +233,7 @@ function DashboardTab({ tasks, sessions }: { tasks: AgentTask[]; sessions: any[]
                     <Search size={14} className="text-accent-blue" />
                   </div>
                   <div>
-                    <div className="text-sm font-medium">QA Engineer</div>
+                    <div className="text-sm font-medium">{agentNames.qae.name}</div>
                     <div className="text-xs text-text-secondary">{stats.qaeeTasks} tasks</div>
                   </div>
                 </div>
@@ -254,7 +257,7 @@ function DashboardTab({ tasks, sessions }: { tasks: AgentTask[]; sessions: any[]
                     <Bot size={14} className="text-accent-purple" />
                   </div>
                   <div>
-                    <div className="text-sm font-medium">Automation Engineer</div>
+                    <div className="text-sm font-medium">{agentNames.aue.name}</div>
                     <div className="text-xs text-text-secondary">{stats.aueTasks} tasks</div>
                   </div>
                 </div>
@@ -315,6 +318,7 @@ function TasksTab({
   const [statusFilter, setStatusFilter] = useState<TaskStatus | 'all'>('all');
   const [agentFilter, setAgentFilter] = useState<AgentType | 'all'>('all');
   const [priorityFilter, setPriorityFilter] = useState<TaskPriority | 'all'>('all');
+  const agentNames = useAgentNames();
 
   const filteredTasks = tasks.filter((task) => {
     if (search && !task.title.toLowerCase().includes(search.toLowerCase())) return false;
@@ -361,8 +365,8 @@ function TasksTab({
             className="px-3 py-1.5 bg-elevated border border-border rounded-lg text-sm outline-none"
           >
             <option value="all">All Agents</option>
-            <option value="qae">QA Engineer</option>
-            <option value="aue">Automation Engineer</option>
+            <option value="qae">{agentNames.qae.name}</option>
+            <option value="aue">{agentNames.aue.name}</option>
           </select>
 
           <select

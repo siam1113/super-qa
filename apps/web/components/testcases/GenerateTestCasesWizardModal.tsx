@@ -10,6 +10,7 @@ import { cn, getPriorityColor, getRiskColor } from '@/lib/utils';
 import type { Environment, TestCase } from '@/lib/types';
 import { RunsPanel, useUnreviewedRunCount } from './RunsPanel';
 import { ExplorationLiveViewer } from './ExplorationLiveViewer';
+import { useAgentNames } from '@/hooks/useAgentNames';
 
 const ROOT = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -36,6 +37,7 @@ export function GenerateTestCasesWizardModal({
   const [viewingRuns, setViewingRuns] = useState(false);
   const unreviewedRuns = useUnreviewedRunCount('generate');
   const [count, setCount] = useState(3);
+  const { qae } = useAgentNames();
 
   const [instructions, setInstructions] = useState('');
 
@@ -133,13 +135,13 @@ export function GenerateTestCasesWizardModal({
         body: JSON.stringify(buildRequestBody(runId)),
       });
       const data = await readJson(response);
-      if (!response.ok) throw new Error(data.message || 'QAE could not generate test cases');
+      if (!response.ok) throw new Error(data.message || `${qae.name} could not generate test cases`);
       const nextProposals = (data.proposals || []) as Proposal[];
       setProposals(nextProposals);
       setSelectedIdx(new Set(nextProposals.map((_, index) => index)));
       setPhase('review');
     } catch (reason) {
-      setGenerateError(reason instanceof Error ? reason.message : 'QAE could not generate test cases');
+      setGenerateError(reason instanceof Error ? reason.message : `${qae.name} could not generate test cases`);
       setPhase('review');
     }
   };
@@ -223,11 +225,11 @@ export function GenerateTestCasesWizardModal({
             <h2 className="text-lg font-semibold">Generate test cases</h2>
             <p className="mt-0.5 text-xs text-text-secondary">
               {viewingRuns && 'Background generate requests and their results.'}
-              {!viewingRuns && phase === 'choose' && 'Choose how QAE should design the cases.'}
+              {!viewingRuns && phase === 'choose' && `Choose how ${qae.name} should design the cases.`}
               {!viewingRuns && phase === 'configure' && method === 'instruction' && 'Describe what to test, in your own words.'}
               {!viewingRuns && phase === 'configure' && method === 'ticket' && 'Pick a ticket to design cases from.'}
-              {!viewingRuns && phase === 'configure' && method === 'exploration' && 'Pick an environment for QAE to explore, then look for coverage gaps.'}
-              {!viewingRuns && phase === 'generating' && 'QAE is designing test cases…'}
+              {!viewingRuns && phase === 'configure' && method === 'exploration' && `Pick an environment for ${qae.name} to explore, then look for coverage gaps.`}
+              {!viewingRuns && phase === 'generating' && `${qae.name} is designing test cases…`}
               {!viewingRuns && phase === 'review' && 'Review the proposals, then add the ones you want.'}
             </p>
           </div>
@@ -246,9 +248,9 @@ export function GenerateTestCasesWizardModal({
           <>
             {phase === 'choose' && (
               <div className="motion-safe:animate-fade-in grid gap-3 p-5">
-                <MethodCard icon={<PenLine size={18}/>} title="Plain instruction" description="Tell QAE what to test in your own words." onClick={() => chooseMethod('instruction')}/>
+                <MethodCard icon={<PenLine size={18}/>} title="Plain instruction" description={`Tell ${qae.name} what to test in your own words.`} onClick={() => chooseMethod('instruction')}/>
                 <MethodCard icon={<Ticket size={18}/>} title="From a ticket" description="Pick a synced Jira issue and design cases from its requirements." onClick={() => chooseMethod('ticket')}/>
-                <MethodCard icon={<Compass size={18}/>} title="From exploration" description="QAE explores your catalogued flows and proposes cases for the weakest coverage." onClick={() => chooseMethod('exploration')}/>
+                <MethodCard icon={<Compass size={18}/>} title="From exploration" description={`${qae.name} explores your catalogued flows and proposes cases for the weakest coverage.`} onClick={() => chooseMethod('exploration')}/>
               </div>
             )}
 
@@ -333,13 +335,13 @@ export function GenerateTestCasesWizardModal({
               <div className="motion-safe:animate-fade-in flex h-full flex-col p-5">
                 <BackLink onClick={backToChoose}/>
                 <div className="mt-3 rounded-xl border border-border bg-elevated/50 p-4 text-sm text-text-secondary">
-                  QAE will explore the selected environment's live app, then propose cases for the areas with the weakest coverage.
+                  {qae.name} will explore the selected environment's live app, then propose cases for the areas with the weakest coverage.
                 </div>
                 <label className="mt-3 block text-xs font-semibold text-text-secondary">ENVIRONMENT TO EXPLORE
                   {environmentsLoading && <span className="mt-1.5 flex items-center gap-2 text-xs font-normal text-text-secondary"><Loader2 size={13} className="animate-spin"/>Loading environments…</span>}
                   {!environmentsLoading && environmentsError && <span className="mt-1.5 block text-xs font-normal text-danger">{environmentsError}</span>}
                   {!environmentsLoading && environments && environments.length === 0 && (
-                    <span className="mt-1.5 block text-xs font-normal text-text-secondary">No environments configured. QAE will fall back to catalogued coverage only — <a href="/environments" target="_blank" rel="noreferrer" className="text-accent-blue hover:underline">add one</a> to explore the real app.</span>
+                    <span className="mt-1.5 block text-xs font-normal text-text-secondary">No environments configured. {qae.name} will fall back to catalogued coverage only — <a href="/environments" target="_blank" rel="noreferrer" className="text-accent-blue hover:underline">add one</a> to explore the real app.</span>
                   )}
                   {!environmentsLoading && environments && environments.length > 0 && (
                     <select value={selectedEnvironmentId || ''} onChange={event => setSelectedEnvironmentId(event.target.value || null)} className="ui-field mt-1.5 w-full text-sm">
@@ -358,14 +360,14 @@ export function GenerateTestCasesWizardModal({
                 </label>
                 <label className="mt-3 block text-xs font-semibold text-text-secondary">FOCUS (OPTIONAL)
                   <textarea value={explorationFocus} onChange={event => setExplorationFocus(event.target.value)} rows={2} placeholder="e.g. focus on the checkout and payment flow" className="ui-field mt-1.5 w-full resize-none text-sm"/>
-                  <span className="mt-1 block text-xs font-normal text-text-secondary">Guides what QAE looks for in what it explores — it doesn't change which pages get visited.</span>
+                  <span className="mt-1 block text-xs font-normal text-text-secondary">Guides what {qae.name} looks for in what it explores — it doesn't change which pages get visited.</span>
                 </label>
                 <div className="mt-3 flex items-center justify-between rounded-lg border border-border px-3.5 py-2.5">
                   <span className="text-xs font-semibold text-text-secondary">HOW MANY CASES</span>
                   <div className="flex items-center gap-2">
                     <button type="button" onClick={() => setExplorationAutoCount(true)}
                             className={cn('rounded px-2 py-1 text-xs font-medium', explorationAutoCount ? 'bg-accent-purple/15 text-accent-purple' : 'text-text-secondary hover:text-text-primary')}>
-                      Let QAE decide
+                      Let {qae.name} decide
                     </button>
                     {explorationAutoCount ? (
                       <button type="button" onClick={() => setExplorationAutoCount(false)} className="text-xs text-text-secondary hover:text-text-primary">Set a number</button>
@@ -392,7 +394,7 @@ export function GenerateTestCasesWizardModal({
               ) : (
                 <div className="motion-safe:animate-fade-in flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
                   <Loader2 size={28} className="animate-spin text-accent-purple"/>
-                  <p className="text-sm font-medium">QAE is designing test cases…</p>
+                  <p className="text-sm font-medium">{qae.name} is designing test cases…</p>
                 </div>
               )
             )}

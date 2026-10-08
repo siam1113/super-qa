@@ -250,14 +250,16 @@ export class AgentsService {
    * resolves that project's configured resources, and gated by canExecute so
    * execution-effect skills only run when the activity's autonomy level allows it.
    */
-  async runWorkflowSkill(agentType: 'qae' | 'aue', skill: string, inputs: Record<string, unknown>, requestId: string, projectId: string, canExecute: boolean): Promise<{ status: string; summary: string; data: Record<string, unknown>; publication: string }> {
+  async runWorkflowSkill(agentType: 'qae' | 'aue', skill: string, inputs: Record<string, unknown>, requestId: string, projectId: string, canExecute: boolean, timeoutMs: number = 130000): Promise<{ status: string; summary: string; data: Record<string, unknown>; publication: string }> {
     const key = process.env.QA_WORKFLOW_KEY;
     if (!key || key.length < 32) throw new ServiceUnavailableException('QA workflow access is not configured');
     const response = await fetch(`${this.runtimeUrl}/workflows/runs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-qa-workflow-key': key },
       body: JSON.stringify({ request_id: requestId, agent_type: agentType, skill, inputs, allow_model: false, project_id: projectId, can_execute: canExecute }),
-      signal: AbortSignal.timeout(130000),
+      // Default covers every other skill call unchanged; explore_app's agentic loop
+      // needs more room (see QaService.exploreEnvironment, which passes a larger value).
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!response.ok) throw new Error(`Workflow run failed with status ${response.status}`);
     return await response.json();

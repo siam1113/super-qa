@@ -22,6 +22,16 @@ export interface LiveStepState {
   errorMessage?: string | null;
 }
 
+export interface LiveAgentEvent {
+  stepNumber: number;
+  phase: string;
+  detail: string;
+  // Present on exploration's agentic-loop events (see agents/shared/skills/exploration.py's
+  // publish_activity) — the mechanical tool call behind this narration line, shown
+  // alongside it in the live viewer so the raw detail is visible, not just the prose.
+  raw?: { tool: string; arguments: Record<string, unknown> } | null;
+}
+
 export interface LiveConsoleLog {
   level: string;
   message: string;
@@ -52,6 +62,18 @@ export interface LiveExecutionState {
   networkRequests: LiveNetworkRequest[];
   latestFrame: string | null;
   pendingQuestion: LiveQuestion | null;
+  agentLog: LiveAgentEvent[];
+  /** Most recent agent event, so the UI can show a live "what it's waiting on right
+   * now" indicator. Cleared on every 'step' message (a real action just changed),
+   * so a stale status can't linger past whatever it was describing — it reappears
+   * within one heartbeat interval if the same wait is still ongoing. */
+  agentStatus: (LiveAgentEvent & { receivedAt: number }) | null;
+  /** Cooperative stop/pause state, set by request_stop/set_paused on the agents
+   * side (see LiveExecutionRegistry) and echoed back here via 'control' messages
+   * so every viewer of the same run — not just the one that clicked the button —
+   * reflects the current state. */
+  stopRequested: boolean;
+  paused: boolean;
 }
 
 const AGENTS_URL = process.env.NEXT_PUBLIC_AGENTS_URL || 'http://localhost:8000';
@@ -67,6 +89,30 @@ export async function cancelExecution(runId: string): Promise<void> {
   if (!response.ok) {
     const body = await response.json().catch(() => null);
     throw new Error(body?.detail || `Could not cancel execution (${response.status})`);
+  }
+}
+
+/** Asks a cooperative run (e.g. live exploration) to stop at its next safe
+ * checkpoint and keep whatever it already gathered — see LiveExecutionRegistry.
+ * request_stop. Unlike cancelExecution, this does not hard-interrupt anything. */
+export async function stopExploration(runId: string): Promise<void> {
+  const response = await fetch(`${AGENTS_URL}/executions/${runId}/stop`, { method: 'POST' });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.detail || `Could not stop exploration (${response.status})`);
+  }
+}
+
+/** Pauses or resumes a cooperative run at its next safe checkpoint. */
+export async function pauseExploration(runId: string, paused: boolean): Promise<void> {
+  const response = await fetch(`${AGENTS_URL}/executions/${runId}/pause`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ paused }),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.detail || `Could not ${paused ? 'pause' : 'resume'} exploration (${response.status})`);
   }
 }
 
@@ -93,6 +139,10 @@ const initialState: LiveExecutionState = {
   networkRequests: [],
   latestFrame: null,
   pendingQuestion: null,
+  agentLog: [],
+  agentStatus: null,
+  stopRequested: false,
+  paused: false,
 };
 
 export function useLiveExecution(runId: string | null): LiveExecutionState {
@@ -140,9 +190,20 @@ export function useLiveExecution(runId: string | null): LiveExecutionState {
                 networkRequests: message.networkRequests || [],
                 latestFrame: message.latestFrame || previous.latestFrame,
                 pendingQuestion: message.pendingQuestion || null,
+                agentLog: message.agentLog || [],
+                stopRequested: message.stopRequested || false,
+                paused: message.paused || false,
               };
             case 'step':
-              return { ...previous, steps: message.steps || [] };
+              return { ...previous, steps: message.steps || [], agentStatus: null };
+            case 'control':
+              return { ...previous, stopRequested: !!message.stopRequested, paused: !!message.paused };
+            case 'agent':
+              return {
+                ...previous,
+                agentLog: [...previous.agentLog, message].slice(-300),
+                agentStatus: { stepNumber: message.stepNumber, phase: message.phase, detail: message.detail, receivedAt: Date.now() },
+              };
             case 'frame':
               return { ...previous, latestFrame: message.dataUrl };
             case 'question':
@@ -154,7 +215,7 @@ export function useLiveExecution(runId: string | null): LiveExecutionState {
             case 'network':
               return { ...previous, networkRequests: [...previous.networkRequests, message.request].slice(-500) };
             case 'status':
-              return { ...previous, status: message.status };
+              return { ...previous, status: message.status, agentStatus: null };
             default:
               return previous;
           }

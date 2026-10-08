@@ -73,12 +73,30 @@ function StepRow({ step }: { step: LiveStepState }) {
   );
 }
 
-type BottomTab = 'logs' | 'console' | 'network';
+type BottomTab = 'logs' | 'agent' | 'console' | 'network';
+
+const AGENT_PHASE_TONE: Record<string, string> = {
+  llm_retry: 'text-warning',
+  tool_heartbeat: 'text-info',
+  thinking_heartbeat: 'text-info',
+};
+
+/** Ticking "Ns elapsed" since an agent status/event was received — the live proof
+ * that the run is still alive and not frozen, independent of whatever's being waited on. */
+function useTicker(active: boolean, intervalMs = 1000) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!active) return;
+    const interval = setInterval(() => setTick(value => value + 1), intervalMs);
+    return () => clearInterval(interval);
+  }, [active, intervalMs]);
+}
 
 export function LiveExecutionViewer({ runId, testName, onClose, variant = 'modal' }: { runId: string; testName?: string; onClose: () => void; variant?: 'modal' | 'page' }) {
   const live = useLiveExecution(runId);
   const [tab, setTab] = useState<BottomTab>('logs');
   const elapsed = useElapsed(live.status === 'running');
+  useTicker(live.status === 'running' && live.agentStatus != null);
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState('');
 
@@ -142,6 +160,18 @@ export function LiveExecutionViewer({ runId, testName, onClose, variant = 'modal
         </div>
       </div>
 
+      {live.status === 'running' && live.agentStatus && (
+        <div className="flex flex-none items-center gap-2 border-b border-border bg-info/5 px-4 py-1.5 text-xs text-info">
+          <Loader2 size={12} className="flex-none animate-spin" />
+          <span className="truncate">
+            Step {live.agentStatus.stepNumber}: {live.agentStatus.detail}
+          </span>
+          <span className="flex-none text-[11px] text-text-secondary">
+            {Math.max(0, Math.floor((Date.now() - live.agentStatus.receivedAt) / 1000))}s ago
+          </span>
+        </div>
+      )}
+
       <div className="flex min-h-0 flex-1">
         <div className="flex w-[26rem] flex-none flex-col gap-2 overflow-y-auto border-r border-border p-3">
           {live.steps.length === 0 && <p className="text-xs text-text-secondary">Waiting for steps…</p>}
@@ -161,7 +191,7 @@ export function LiveExecutionViewer({ runId, testName, onClose, variant = 'modal
 
       <div className="flex h-56 flex-none flex-col border-t border-border">
         <div className="flex flex-none gap-1 border-b border-border px-3 pt-2">
-          {(['logs', 'console', 'network'] as BottomTab[]).map(name => (
+          {(['logs', 'agent', 'console', 'network'] as BottomTab[]).map(name => (
             <button
               key={name}
               type="button"
@@ -169,6 +199,7 @@ export function LiveExecutionViewer({ runId, testName, onClose, variant = 'modal
               className={cn('rounded-t-lg px-3 py-1.5 text-xs font-medium capitalize', tab === name ? 'bg-elevated text-text-primary' : 'text-text-secondary hover:text-text-primary')}
             >
               {name}
+              {name === 'agent' && live.agentLog.length > 0 && <span className="ml-1.5 text-text-secondary">{live.agentLog.length}</span>}
               {name === 'console' && live.consoleLogs.length > 0 && <span className="ml-1.5 text-text-secondary">{live.consoleLogs.length}</span>}
               {name === 'network' && live.networkRequests.length > 0 && <span className="ml-1.5 text-text-secondary">{live.networkRequests.length}</span>}
             </button>
@@ -176,6 +207,11 @@ export function LiveExecutionViewer({ runId, testName, onClose, variant = 'modal
         </div>
         <div className="flex-1 overflow-y-auto px-3 py-2 font-mono text-[11px] leading-5">
           {tab === 'logs' && (logLines.length ? logLines.map(line => <p key={line.key} className={line.tone}>{line.text}</p>) : <p className="text-text-secondary">No actions yet.</p>)}
+          {tab === 'agent' && (live.agentLog.length ? live.agentLog.map((event, index) => (
+            <p key={index} className={AGENT_PHASE_TONE[event.phase] || 'text-text-secondary'}>
+              Step {event.stepNumber}: {event.detail}
+            </p>
+          )) : <p className="text-text-secondary">No agent activity yet — this fills in while the agent is deciding what to do, between tool calls.</p>)}
           {tab === 'console' && (live.consoleLogs.length ? live.consoleLogs.map((log, index) => (
             <p key={index} className={log.level === 'error' ? 'text-danger' : log.level === 'warning' || log.level === 'warn' ? 'text-warning' : 'text-text-secondary'}>
               [{log.level}] {log.message}

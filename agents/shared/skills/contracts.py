@@ -239,11 +239,31 @@ class ExploreInput(Contract):
     url: Optional[str] = Field(default=None, min_length=1, max_length=2000)
     mode: Literal["auto", "live", "static_bundle"] = "auto"
     start_path: Optional[str] = Field(default=None, min_length=1, max_length=1000)
-    max_pages: int = Field(default=10, ge=1, le=20, strict=True)
+    max_pages: int = Field(default=10, ge=1, le=25, strict=True)
     max_depth: int = Field(default=2, ge=0, le=4, strict=True)
-    max_commands: int = Field(default=60, ge=5, le=150, strict=True)
+    max_commands: int = Field(default=60, ge=5, le=240, strict=True)
     authenticate: bool = Field(default=False, strict=True)
     actions: List[ExploreAction] = Field(default_factory=list, max_length=20)
+    # Free-text steering for live mode's agentic exploration loop (see exploration.py):
+    # what feature/tab/flow to navigate toward and interact with. Unset means a broad,
+    # human-like tour of the whole app rather than a targeted one. Not used by static_bundle.
+    goal: Optional[str] = Field(default=None, max_length=1000)
+    # Caps LLM-decided actions in the agentic loop, independent of max_pages/max_commands.
+    max_actions: int = Field(default=20, ge=1, le=50, strict=True)
+    # Wall-clock budget for the whole live session (see explore_live's asyncio.wait_for).
+    # Named levels (quick/standard/deep/exhaustive) are a caller-side convenience that
+    # picks this plus max_pages/max_actions/max_commands together — see qa.service.ts's
+    # LEVEL_PRESETS — this field itself just takes whatever number it's given.
+    time_budget_seconds: int = Field(default=240, ge=30, le=600, strict=True)
+    # Purely textual: steers how thoroughly build_agentic_system_prompt tells the model to
+    # dig into each area before moving on. Doesn't itself change any budget — the caller
+    # (e.g. qa.service.ts's level presets) is expected to pass matching budget numbers above.
+    level: Literal["quick", "standard", "deep", "exhaustive"] = "standard"
+
+    @field_validator("goal")
+    @classmethod
+    def normalize_goal(cls, value):
+        return value if value and value.strip() else None
 
     @field_validator("start_path")
     @classmethod

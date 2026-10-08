@@ -732,6 +732,31 @@ async def cancel_execution(run_id: str):
     return {"runId": run_id, "cancelled": True}
 
 
+@app.post("/executions/{run_id}/stop")
+async def stop_execution(run_id: str):
+    """Cooperatively stop a run that has no asyncio.Task to hard-cancel (e.g. live
+    exploration, which runs synchronously inside /workflows/runs) — it finishes at
+    its next safe checkpoint and returns whatever it already gathered, rather than
+    being interrupted mid-browser-call. A harness execution started via
+    /executions/run can also be stopped this way if it doesn't need the harder
+    task.cancel() in /executions/{run_id}/cancel."""
+    if not get_live_registry().request_stop(run_id):
+        raise HTTPException(status_code=404, detail="Execution not found or already finished")
+    return {"runId": run_id, "stopRequested": True}
+
+
+class SetPausedRequest(BaseModel):
+    paused: bool = Field(strict=True)
+
+
+@app.post("/executions/{run_id}/pause")
+async def pause_execution(run_id: str, request: SetPausedRequest):
+    """Pause or resume a cooperative run at its next safe checkpoint."""
+    if not get_live_registry().set_paused(run_id, request.paused):
+        raise HTTPException(status_code=404, detail="Execution not found or already finished")
+    return {"runId": run_id, "paused": request.paused}
+
+
 class AnswerQuestionRequest(BaseModel):
     questionId: str
     text: str = Field(min_length=1, max_length=2000)

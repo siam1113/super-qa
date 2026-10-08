@@ -48,6 +48,9 @@ export class GenerateQaCasesDto {
   // strictly by the explore_app skill itself; an invalid path just degrades
   // to no exploration summary, same as any other exploration failure.
   @IsOptional() @IsString() @Length(1, 500) explorationStartPath?: string;
+  // Exploration mode only: how much time/budget the agentic loop spends per area —
+  // see QaService.LEVEL_PRESETS for the exact numbers behind each name.
+  @IsOptional() @IsIn(['quick', 'standard', 'deep', 'exhaustive']) explorationLevel?: 'quick' | 'standard' | 'deep' | 'exhaustive';
 }
 
 export class RefineQaCaseDto {

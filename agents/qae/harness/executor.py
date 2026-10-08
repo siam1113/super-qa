@@ -3,6 +3,7 @@ import asyncio
 import json
 import logging
 import os
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -100,6 +101,8 @@ class TestExecutor:
         on_step_start: Optional[Callable[[StepState], None]] = None,
         on_step_complete: Optional[Callable[[StepState], None]] = None,
         on_action_complete: Optional[Callable[[ActionRecord], None]] = None,
+        on_action_start: Optional[Callable[[ActionRecord], None]] = None,
+        on_agent_event: Optional[Callable[[Dict[str, Any]], None]] = None,
         llm: Optional[Any] = None,
         max_step_iterations: Optional[int] = None,
         locator_hints: Optional[List[Dict[str, Any]]] = None,
@@ -112,6 +115,15 @@ class TestExecutor:
         self.on_step_start = on_step_start
         self.on_step_complete = on_step_complete
         self.on_action_complete = on_action_complete
+        # Fired the instant a tool call is dispatched (action still "pending"), not just
+        # when it finishes — without this, a live viewer sees total silence for however
+        # long the call takes (e.g. a click waiting on a slow navigation), indistinguishable
+        # from the run being frozen.
+        self.on_action_start = on_action_start
+        # Narration for everything that isn't a tool call itself: waiting on the model,
+        # periodic "still waiting" heartbeats, and retry/timeout notices. See
+        # _emit_agent_event / _await_with_heartbeat.
+        self.on_agent_event = on_agent_event
         self.llm = llm or create_llm(agent_type="qae")
         self.max_step_iterations = max_step_iterations or int(os.getenv("GROUNDED_STEP_MAX_ITERATIONS", "8"))
         self.locator_hints = locator_hints or []
@@ -141,6 +153,46 @@ class TestExecutor:
         # timeout, just one layer up the stack.
         self.llm_retry_attempts = int(os.getenv("QAE_LLM_RETRY_ATTEMPTS", "3"))
         self.llm_retry_delay_ms = int(os.getenv("QAE_LLM_RETRY_DELAY_MS", "1000"))
+        # Hard cap on a single model call, separate from the step's overall wall-clock
+        # budget — without this, a provider that hangs (rather than erroring) silently
+        # burns the whole step_timeout_seconds before anything surfaces. Deliberately
+        # generous: a large accessibility tree + tool schema is a slow first-token case,
+        # not just network flakiness.
+        self.llm_call_timeout_seconds = float(os.getenv("QAE_LLM_CALL_TIMEOUT_SECONDS", "60"))
+        # How often to emit a "still waiting" agent event while a model or tool call is
+        # in flight. This is the fix for "it's been stuck with no new logs" — the viewer
+        # gets a live tick instead of silence, whichever side (model vs browser) is slow.
+        self.heartbeat_seconds = float(os.getenv("QAE_HEARTBEAT_SECONDS", "8"))
+
+    def _emit_agent_event(self, step_number: int, phase: str, detail: str) -> None:
+        if self.on_agent_event:
+            self.on_agent_event({"stepNumber": step_number, "phase": phase, "detail": detail})
+
+    async def _await_with_heartbeat(
+        self,
+        awaitable: Awaitable[Any],
+        *,
+        on_heartbeat: Callable[[float], None],
+    ) -> Any:
+        """Await `awaitable`, calling on_heartbeat(elapsed_seconds) every
+        self.heartbeat_seconds while it's still pending. Purely a transparency layer —
+        does not itself time out or cancel anything; callers that need a hard deadline
+        wrap the awaitable in asyncio.wait_for separately."""
+        task = asyncio.ensure_future(awaitable)
+        start = time.monotonic()
+        try:
+            while True:
+                done, _ = await asyncio.wait({task}, timeout=self.heartbeat_seconds)
+                if task in done:
+                    return task.result()
+                on_heartbeat(time.monotonic() - start)
+        finally:
+            if not task.done():
+                task.cancel()
+                try:
+                    await task
+                except (asyncio.CancelledError, Exception):
+                    pass
 
     async def execute_step(
         self,
@@ -231,8 +283,26 @@ class TestExecutor:
         messages: List[Any] = [SystemMessage(content=system), HumanMessage(content=f"Execute step {step.step_number} now.")]
         verified = False
 
-        for _ in range(self.max_step_iterations):
-            response = await self._invoke_model_with_retry(model, messages)
+        for iteration in range(1, self.max_step_iterations + 1):
+            self._emit_agent_event(
+                step.step_number, "thinking_start",
+                f"Deciding next action (iteration {iteration}/{self.max_step_iterations})…",
+            )
+            call_start = time.monotonic()
+            response = await self._await_with_heartbeat(
+                self._invoke_model_with_retry(model, messages, step_number=step.step_number, iteration=iteration),
+                on_heartbeat=lambda elapsed: self._emit_agent_event(
+                    step.step_number, "thinking_heartbeat",
+                    f"Still waiting for the model (iteration {iteration}/{self.max_step_iterations}) — "
+                    f"{elapsed:.0f}s elapsed…",
+                ),
+            )
+            call_elapsed = time.monotonic() - call_start
+            decided = ", ".join(c.get("name", "?") for c in (response.tool_calls or [])) or "no tool call"
+            self._emit_agent_event(
+                step.step_number, "thinking_end",
+                f"Model responded in {call_elapsed:.1f}s — {decided}",
+            )
             messages.append(response)
 
             usage_metadata = getattr(response, "usage_metadata", None) or {}
@@ -282,26 +352,43 @@ class TestExecutor:
             error=f"Could not verify the expected result within {self.max_step_iterations} tool calls",
         )
 
-    async def _invoke_model_with_retry(self, model: Any, messages: List[Any]) -> Any:
+    async def _invoke_model_with_retry(
+        self, model: Any, messages: List[Any], *, step_number: int, iteration: int,
+    ) -> Any:
         """Call the LLM with retry/backoff for transient provider errors (rate
         limits, timeouts, connection errors) — the browser-tool retry policy
         already protects against transient failures below the model; this is the
-        same protection for the model call itself."""
+        same protection for the model call itself. Each attempt is bounded by
+        llm_call_timeout_seconds so a provider that hangs rather than erroring still
+        surfaces (and retries) instead of silently burning the whole step budget."""
         last_error: Optional[Exception] = None
 
         for attempt in range(self.llm_retry_attempts + 1):
             try:
-                return await model.ainvoke(messages)
+                return await asyncio.wait_for(model.ainvoke(messages), timeout=self.llm_call_timeout_seconds)
+            except asyncio.TimeoutError as e:
+                last_error = e
+                reason = f"no response within {self.llm_call_timeout_seconds:.0f}s"
             except Exception as e:
                 last_error = e
-                if attempt >= self.llm_retry_attempts or not self._is_retryable_llm_error(e):
+                if not self._is_retryable_llm_error(e):
                     raise
-                delay_seconds = (self.llm_retry_delay_ms * (2 ** attempt)) / 1000
-                logger.warning(
-                    f"LLM call failed (attempt {attempt + 1}/{self.llm_retry_attempts + 1}), "
-                    f"retrying in {delay_seconds:.1f}s: {e}"
-                )
-                await asyncio.sleep(delay_seconds)
+                reason = str(e)
+
+            if attempt >= self.llm_retry_attempts:
+                raise last_error
+
+            delay_seconds = (self.llm_retry_delay_ms * (2 ** attempt)) / 1000
+            logger.warning(
+                f"LLM call failed (attempt {attempt + 1}/{self.llm_retry_attempts + 1}), "
+                f"retrying in {delay_seconds:.1f}s: {reason}"
+            )
+            self._emit_agent_event(
+                step_number, "llm_retry",
+                f"Model call problem on iteration {iteration} ({reason}) — "
+                f"retrying in {delay_seconds:.1f}s (attempt {attempt + 2}/{self.llm_retry_attempts + 1})",
+            )
+            await asyncio.sleep(delay_seconds)
 
         raise last_error  # pragma: no cover - loop always returns or raises above
 
@@ -369,6 +456,13 @@ class TestExecutor:
         if not action:
             raise ValueError("Failed to add action to step")
 
+        # Publish immediately, while the action is still "pending" — otherwise a live
+        # viewer sees nothing at all for however long this call takes, indistinguishable
+        # from the run being frozen (see on_action_start docstring).
+        if self.on_action_start:
+            self.on_action_start(action)
+
+        step_number = state.steps[step_index].step_number
         last_error = None
         retries = 0
 
@@ -377,9 +471,15 @@ class TestExecutor:
                 logger.debug(f"Executing {tool_call.tool_name} (attempt {retries + 1})")
 
                 page_id_before_call = self.mcp.page_id
-                result = await self.mcp.call_tool(
-                    tool_call.tool_name,
-                    tool_call.arguments,
+                selector = tool_call.arguments.get("selector")
+                target_desc = f"{tool_call.tool_name} ({selector})" if selector else tool_call.tool_name
+                current_retry = retries
+                result = await self._await_with_heartbeat(
+                    self.mcp.call_tool(tool_call.tool_name, tool_call.arguments),
+                    on_heartbeat=lambda elapsed: self._emit_agent_event(
+                        step_number, "tool_heartbeat",
+                        f"Still waiting on `{target_desc}` — {elapsed:.0f}s elapsed (attempt {current_retry + 1})…",
+                    ),
                 )
                 self._follow_new_tab_and_dialogs(page_id_before_call, result)
 

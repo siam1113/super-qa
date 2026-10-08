@@ -384,6 +384,9 @@ class TestOrchestrator:
             def publish_steps(_step_state) -> None:
                 live.publish(state.run_id, {"type": "step", "steps": [s.to_dict() for s in state.steps]})
 
+            def publish_agent_event(event: dict) -> None:
+                live.publish(state.run_id, {"type": "agent", **event})
+
             def handle_step_complete(step_state) -> None:
                 publish_steps(step_state)
                 emit_status(f"Step {state.current_step}/{len(state.steps)}: {step_state.description} — {step_state.status.value}")
@@ -396,6 +399,8 @@ class TestOrchestrator:
                 on_step_start=publish_steps,
                 on_step_complete=handle_step_complete,
                 on_action_complete=publish_steps,
+                on_action_start=publish_steps,
+                on_agent_event=publish_agent_event,
                 locator_hints=business_context.locators,
                 step_timeout_seconds=self.config.step_timeout_seconds,
                 step_retry_count=self.config.step_retry_count,

@@ -8,12 +8,26 @@ import { isDeepStrictEqual } from 'util';
 import { SourcesService } from '../sources/sources.service';
 import { BusinessService } from '../business/business.service';
 import { AgentsService } from '../agents/agents.service';
+import { ChatAgent } from '../chat/chat.entity';
 import { BusinessItem } from '../business/entities/business-item.entity';
 import { Document } from '../documents/entities/document.entity';
 import { WorkflowArtifact } from '../autonomy/workflow-artifact.entity';
 import { Environment } from '../environments/environment.entity';
 import { QaTestCase, QaRun, QaExecution, QaHealingSuggestion, QaExecutionPlan, QaGenerationRun } from './qa.entity';
 import { CreateQaCaseDto, UpdateQaCaseDto, ReviewQaCaseDto, CreateQaRunDto, RecordQaResultDto, CreateHealingDto, SaveQaPlanDto, RunWithAgentDto, AgentExecutionResultDto, GenerateQaCasesDto, RefineQaCaseDto } from './qa.dto';
+
+// How hard explore_app's agentic loop works per exploration level — see
+// agents/shared/skills/exploration.py's ExploreInput/LEVEL_DEPTH_GUIDANCE, which is
+// told the same level name purely for prompt phrasing; these numbers are the single
+// source of truth for the actual budgets. timeoutMs padding (+60s) covers the gap
+// between the agents service's own wall-clock budget and this HTTP call's timeout.
+const LEVEL_PRESETS: Record<'quick' | 'standard' | 'deep' | 'exhaustive',
+  { maxPages: number; maxActions: number; maxCommands: number; timeBudgetSeconds: number }> = {
+  quick: { maxPages: 6, maxActions: 8, maxCommands: 50, timeBudgetSeconds: 90 },
+  standard: { maxPages: 12, maxActions: 20, maxCommands: 100, timeBudgetSeconds: 180 },
+  deep: { maxPages: 18, maxActions: 30, maxCommands: 150, timeBudgetSeconds: 260 },
+  exhaustive: { maxPages: 25, maxActions: 50, maxCommands: 220, timeBudgetSeconds: 420 },
+};
 
 const GENERATE_PRIORITIES = ['P0', 'P1', 'P2', 'P3'];
 const GENERATE_RISKS = ['low', 'medium', 'high', 'critical'];
@@ -37,6 +51,16 @@ export class QaService {
     if (!testCase.evidence) return;
     const document = await manager.findOne(Document, { where: { id: testCase.evidence.documentId, sourceId: testCase.evidence.sourceId }, lock: { mode: 'pessimistic_read' } });
     if (!document || document.processedHash !== testCase.evidence.revisionHash) throw new ConflictException('Source evidence changed; import and review the current case');
+  }
+
+  // The user can rename their QAE agent (see Agents.tsx's rename UI, mirrored by
+  // useAgentNames on the frontend) — backend-thrown messages have no access to that
+  // React-side cache, so anywhere user-facing text names the agent, it must look up
+  // the current display name here instead of hardcoding "QAE". Falls back to the
+  // generic label if no agent row exists yet (mirrors useAgentNames' DEFAULT_PROFILES).
+  private async agentDisplayName(kind: 'qae' | 'aue'): Promise<string> {
+    const agent = await this.database.getRepository(ChatAgent).findOneBy({ kind });
+    return agent?.name || kind.toUpperCase();
   }
 
   private validateCase(input: CreateQaCaseDto): void {
@@ -426,18 +450,20 @@ export class QaService {
       const coverageContext = coverage.length
         ? `Known flows and how many test cases currently cover each (lowest coverage first):\n${coverage.map(item => `- ${item.name}: ${item.cases} case(s)`).join('\n')}`
         : 'No flows have been catalogued yet for this platform; propose cases for common, high-value areas of a typical web application.';
-      // The user's free-text focus (same field 'instruction' mode uses) steers what
-      // the model looks for in what was explored; it never reaches the browser itself.
+      // The user's free-text focus (same field 'instruction' mode uses) now also
+      // steers exploration itself (passed through as explore_app's `goal`, below) —
+      // not just the framing of what the model looks for in what was explored.
       const focus = dto.instructions?.trim();
       if (dto.environmentId) {
         // The user explicitly asked QAE to explore a real environment, so generation
         // must be grounded in what was actually found there — if exploration itself
         // failed, stop rather than quietly falling back to guessing from catalogued
         // flow names, which would look like it explored when it didn't.
-        const explored = await this.exploreEnvironment(dto.environmentId, dto.explorationRunId, dto.explorationStartPath);
+        const explored = await this.exploreEnvironment(dto.environmentId, dto.explorationRunId, dto.explorationStartPath, focus, dto.explorationLevel);
         if (!explored) {
+          const name = await this.agentDisplayName('qae');
           throw new ServiceUnavailableException(
-            'QAE could not explore this environment, so it will not invent test cases in its place. ' +
+            `${name} could not explore this environment, so it will not invent test cases in its place. ` +
             "Check the environment's base URL is reachable, or switch to \"Coverage stats only\" to generate from catalogued flows instead.");
         }
         framing = focus
@@ -479,7 +505,7 @@ export class QaService {
   // unset, nothing crawled — the caller (generateTestCases) then stops
   // rather than quietly substituting catalogued-coverage guessing, since
   // the user explicitly asked for this environment to be explored.
-  private async exploreEnvironment(environmentId: string, explorationRunId?: string, startPath?: string): Promise<string | null> {
+  private async exploreEnvironment(environmentId: string, explorationRunId?: string, startPath?: string, goal?: string, level?: 'quick' | 'standard' | 'deep' | 'exhaustive'): Promise<string | null> {
     try {
       const environment = await this.database.getRepository(Environment).findOneBy({ id: environmentId });
       if (!environment?.baseUrl) {
@@ -488,18 +514,30 @@ export class QaService {
       }
       // Use the wizard's pre-generated id as the agents runtime's live run id so its
       // viewer (already connected via useLiveExecution) receives this run's steps.
-      // start_path is validated strictly by explore_app's own ExploreInput contract;
-      // an invalid value just fails that one run, degrading to null below like any
-      // other exploration failure, rather than rejecting the whole request here.
+      // start_path/goal are validated strictly by explore_app's own ExploreInput
+      // contract; an invalid value just fails that one run, degrading to null below
+      // like any other exploration failure, rather than rejecting the whole request
+      // here. goal now drives explore_app's agentic loop directly (see
+      // agents/shared/skills/exploration.py) — it's no longer only used for
+      // post-hoc framing (see the `focus` usage in generateTestCases above).
       // canExecute must be true: explore_app's effect is "browser_exploration",
       // which SkillRuntime.run() gates behind current_scope().can_execute before
       // the graph even starts — with false this always fails immediately with
       // "This app assignment cannot start execution or external writes", so
       // exploration never actually runs (verified locally: can_execute=false
       // 422s every time; true runs the real crawl).
+      // Numeric budgets come from LEVEL_PRESETS, keyed by the same level name explore_app
+      // gets (purely for prompt phrasing — see exploration.py's LEVEL_DEPTH_GUIDANCE).
+      // timeoutMs is padded 60s past the preset's own time_budget_seconds so this HTTP
+      // call outlasts the agents service's internal wall-clock budget, not race it.
+      const preset = LEVEL_PRESETS[level || 'standard'];
       const result = await this.agentsService.runWorkflowSkill('qae', 'explore_app',
-        { url: environment.baseUrl, start_path: startPath || undefined },
-        explorationRunId || randomUUID(), 'local', true);
+        {
+          url: environment.baseUrl, start_path: startPath || undefined, goal: goal || undefined,
+          level: level || 'standard', max_pages: preset.maxPages, max_actions: preset.maxActions,
+          max_commands: preset.maxCommands, time_budget_seconds: preset.timeBudgetSeconds,
+        },
+        explorationRunId || randomUUID(), 'local', true, preset.timeBudgetSeconds * 1000 + 60000);
       // result.summary is always a fixed placeholder ("Workflow artifact produced;
       // inspect its data for QA outcomes") on success — never a real description —
       // so the actual findings have to be built from result.data.pages ourselves.

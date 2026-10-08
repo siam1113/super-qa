@@ -38,7 +38,9 @@ class Skill:
 
     def requires_request_id(self, inputs):
         return self.idempotency == "required" or (self.idempotency == "reproduction" and isinstance(inputs, dict) and bool(inputs.get("reproduce"))) or (self.idempotency == "browser_actions" and
-            isinstance(inputs, dict) and bool(inputs.get("actions") or inputs.get("authenticate"))) or (self.idempotency == "repair_submission" and isinstance(inputs, dict) and bool(inputs.get("submit")))
+            # goal drives the agentic loop's own autonomous clicks with no actions supplied —
+            # it can mutate app state just like actions/authenticate, so it needs the same safe-retry guarantee.
+            isinstance(inputs, dict) and bool(inputs.get("actions") or inputs.get("authenticate") or inputs.get("goal"))) or (self.idempotency == "repair_submission" and isinstance(inputs, dict) and bool(inputs.get("submit")))
 
     @property
     def requires_execution(self):

@@ -30,10 +30,25 @@ class LiveSession:
     steps: List[Dict[str, Any]] = field(default_factory=list)
     console_logs: List[Dict[str, Any]] = field(default_factory=list)
     network_requests: List[Dict[str, Any]] = field(default_factory=list)
+    # Narration for what's happening between tool calls — waiting on the model,
+    # periodic "still waiting" heartbeats, retries — so a live viewer (or anyone
+    # reading the backlog after the fact) can tell what it's stuck on instead of
+    # seeing the action list go silent. See TestExecutor.on_agent_event.
+    agent_log: List[Dict[str, Any]] = field(default_factory=list)
     latest_frame: Optional[str] = None
     subscribers: Set[asyncio.Queue] = field(default_factory=set)
     pending_question: Optional[Dict[str, Any]] = None
     pending_answer: Optional["asyncio.Future[str]"] = field(default=None, repr=False)
+    # Cooperative stop/pause for runs that have no asyncio.Task to hard-cancel
+    # (e.g. exploration, which runs synchronously inside one HTTP handler) — the
+    # run checks these at its own safe checkpoints instead of being interrupted
+    # mid-await. See LiveExecutionRegistry.request_stop/set_paused/wait_if_paused.
+    stop_requested: bool = False
+    paused: bool = False
+    _pause_event: asyncio.Event = field(default_factory=asyncio.Event, repr=False)
+
+    def __post_init__(self) -> None:
+        self._pause_event.set()  # not paused by default
 
     def summary(self) -> Dict[str, Any]:
         return {
@@ -54,8 +69,11 @@ class LiveSession:
             "steps": self.steps,
             "consoleLogs": self.console_logs[-200:],
             "networkRequests": self.network_requests[-200:],
+            "agentLog": self.agent_log[-200:],
             "latestFrame": self.latest_frame,
             "pendingQuestion": self.pending_question,
+            "stopRequested": self.stop_requested,
+            "paused": self.paused,
         }
 
 
@@ -97,6 +115,8 @@ class LiveExecutionRegistry:
             session.console_logs.append(event["log"])
         elif event_type == "network":
             session.network_requests.append(event["request"])
+        elif event_type == "agent":
+            session.agent_log.append(event)
         elif event_type == "frame":
             session.latest_frame = event["dataUrl"]
         elif event_type == "question":
@@ -130,6 +150,43 @@ class LiveExecutionRegistry:
         finally:
             session.pending_answer = None
             self.publish(run_id, {"type": "question_resolved", "questionId": question_id})
+
+    def request_stop(self, run_id: str) -> bool:
+        """Ask a cooperative run to stop at its next safe checkpoint, preserving
+        whatever it already produced (unlike cancelling an asyncio.Task, there is
+        no hard interrupt here — the run itself decides when it's safe to check)."""
+        session = self._sessions.get(run_id)
+        if not session:
+            return False
+        session.stop_requested = True
+        session.paused = False
+        session._pause_event.set()  # unblock a paused run so it can observe the stop
+        self.publish(run_id, {"type": "control", "stopRequested": True, "paused": False})
+        return True
+
+    def set_paused(self, run_id: str, paused: bool) -> bool:
+        session = self._sessions.get(run_id)
+        if not session:
+            return False
+        session.paused = paused
+        if paused:
+            session._pause_event.clear()
+        else:
+            session._pause_event.set()
+        self.publish(run_id, {"type": "control", "stopRequested": session.stop_requested, "paused": paused})
+        return True
+
+    def is_stop_requested(self, run_id: str) -> bool:
+        session = self._sessions.get(run_id)
+        return bool(session and session.stop_requested)
+
+    async def wait_if_paused(self, run_id: str) -> None:
+        """Blocks only while paused; returns immediately once resumed (or if the
+        session is unknown/already gone — never hangs a run on a missing session)."""
+        session = self._sessions.get(run_id)
+        if not session:
+            return
+        await session._pause_event.wait()
 
     def answer(self, run_id: str, question_id: str, text: str) -> bool:
         session = self._sessions.get(run_id)

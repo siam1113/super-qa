@@ -58,6 +58,7 @@ export function GenerateTestCasesWizardModal({
   const [explorationRunId, setExplorationRunId] = useState<string | null>(null);
   const [explorationStartPath, setExplorationStartPath] = useState('');
   const [explorationFocus, setExplorationFocus] = useState('');
+  const [explorationLevel, setExplorationLevel] = useState<'quick' | 'standard' | 'deep' | 'exhaustive'>('standard');
   const [explorationAutoCount, setExplorationAutoCount] = useState(true);
 
   const [generateError, setGenerateError] = useState('');
@@ -108,7 +109,7 @@ export function GenerateTestCasesWizardModal({
   }, [selectedSourceId]);
 
   const chooseMethod = (value: Method) => { setMethod(value); setPhase('configure'); };
-  const backToChoose = () => { setMethod(null); setPhase('choose'); setSelectedSourceId(null); setSelectedTicket(null); setSelectedEnvironmentId(null); setExplorationRunId(null); setExplorationStartPath(''); setExplorationFocus(''); setExplorationAutoCount(true); setGenerateError(''); };
+  const backToChoose = () => { setMethod(null); setPhase('choose'); setSelectedSourceId(null); setSelectedTicket(null); setSelectedEnvironmentId(null); setExplorationRunId(null); setExplorationStartPath(''); setExplorationFocus(''); setExplorationLevel('standard'); setExplorationAutoCount(true); setGenerateError(''); };
   const backToConfigure = () => { setPhase('configure'); setGenerateError(''); setProposals(null); setExplorationRunId(null); };
 
   const buildRequestBody = (runId?: string) => method === 'instruction'
@@ -118,7 +119,7 @@ export function GenerateTestCasesWizardModal({
       : {
           mode: 'exploration', count: explorationAutoCount ? undefined : count, environmentId: selectedEnvironmentId || undefined,
           explorationRunId: runId, explorationStartPath: explorationStartPath.trim() || undefined,
-          instructions: explorationFocus.trim() || undefined,
+          instructions: explorationFocus.trim() || undefined, explorationLevel,
         };
 
   const generate = async () => {
@@ -360,8 +361,30 @@ export function GenerateTestCasesWizardModal({
                 </label>
                 <label className="mt-3 block text-xs font-semibold text-text-secondary">FOCUS (OPTIONAL)
                   <textarea value={explorationFocus} onChange={event => setExplorationFocus(event.target.value)} rows={2} placeholder="e.g. focus on the checkout and payment flow" className="ui-field mt-1.5 w-full resize-none text-sm"/>
-                  <span className="mt-1 block text-xs font-normal text-text-secondary">Guides what {qae.name} looks for in what it explores — it doesn't change which pages get visited.</span>
+                  <span className="mt-1 block text-xs font-normal text-text-secondary">Tell {qae.name} what to look for — a feature, tab, or flow — and it will navigate to and interact with that area specifically. Leave it blank and {qae.name} will tour the whole app broadly on its own, like a human tester doing a first pass — giving it direction usually finds more relevant issues.</span>
                 </label>
+                <div className="mt-3">
+                  <span className="block text-xs font-semibold text-text-secondary">EXPLORATION DEPTH</span>
+                  <div className="mt-1.5 grid grid-cols-4 gap-1 rounded-lg border border-border p-1">
+                    {(['quick', 'standard', 'deep', 'exhaustive'] as const).map(level => (
+                      <button
+                        key={level} type="button" onClick={() => setExplorationLevel(level)}
+                        className={cn('rounded-md px-2 py-1.5 text-xs font-medium capitalize transition-colors',
+                          explorationLevel === level ? 'bg-accent text-white' : 'text-text-secondary hover:text-text-primary')}
+                      >
+                        {level}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="mt-1 block text-xs font-normal text-text-secondary">
+                    {{
+                      quick: 'Fast skim — confirms the area exists without trying its controls. Best for a quick sanity pass.',
+                      standard: 'Normal pass — opens the area and tries a couple of its key controls. Good default.',
+                      deep: 'Thorough — works through sub-tabs, filters, and secondary panels before moving on.',
+                      exhaustive: 'Max effort — tries every control it finds in the relevant area. Slowest option.',
+                    }[explorationLevel]}
+                  </span>
+                </div>
                 <div className="mt-3 flex items-center justify-between rounded-lg border border-border px-3.5 py-2.5">
                   <span className="text-xs font-semibold text-text-secondary">HOW MANY CASES</span>
                   <div className="flex items-center gap-2">

@@ -40,6 +40,12 @@ async def publish_pending(store, limit=10):
                 response = await client.post(base + "/workflow-artifacts", json={"projectId": scope,
                     "requestId": request_id, "agentType": role, "skill": skill, "resultJson": payload},
                     headers={"x-workflow-timestamp": timestamp, "x-workflow-signature": signature})
+                if response.status_code == 400:
+                    # A 400 here means the envelope/scope is structurally invalid (e.g. not
+                    # a real UUID) — that can never change by retrying, unlike a 401/404
+                    # (project not created yet) or a 5xx, which are left to retry as before.
+                    store.record_publication_failure(request_id, "rejected: HTTP 400")
+                    continue
                 response.raise_for_status()
                 receipt = response.json()
                 if receipt.get("requestId") != request_id or receipt.get("contentHash") != hashlib.sha256(payload.encode()).hexdigest():

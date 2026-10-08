@@ -31,8 +31,15 @@ class RunStore:
         with self.connect() as connection:
             connection.execute("CREATE TABLE IF NOT EXISTS skill_runs (id TEXT PRIMARY KEY, request_hash TEXT NOT NULL, result TEXT NOT NULL, expires REAL NOT NULL)")
             connection.execute("CREATE TABLE IF NOT EXISTS artifact_outbox (id TEXT PRIMARY KEY, scope TEXT NOT NULL, role TEXT NOT NULL, skill TEXT NOT NULL, payload TEXT NOT NULL, receipt TEXT, last_attempt REAL NOT NULL DEFAULT 0)")
-            if "last_attempt" not in {row[1] for row in connection.execute("PRAGMA table_info(artifact_outbox)")}:
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(artifact_outbox)")}
+            if "last_attempt" not in columns:
                 connection.execute("ALTER TABLE artifact_outbox ADD COLUMN last_attempt REAL NOT NULL DEFAULT 0")
+            if "permanent_failure" not in columns:
+                # A structural 400 (malformed envelope/scope) will never succeed no matter
+                # how many times it's retried, unlike a 401/404/5xx which can resolve once
+                # e.g. the project is created or a signing-key rollout finishes — see
+                # publish_pending's distinction by status code.
+                connection.execute("ALTER TABLE artifact_outbox ADD COLUMN permanent_failure TEXT")
         self.path.chmod(0o600)
 
     @contextmanager
@@ -99,17 +106,23 @@ class RunStore:
     def pending_publications(self, limit=10):
         with self.connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
-            rows = connection.execute("SELECT id, scope, role, skill, payload FROM artifact_outbox WHERE receipt IS NULL ORDER BY last_attempt, rowid LIMIT ?", (limit,)).fetchall()
+            rows = connection.execute("SELECT id, scope, role, skill, payload FROM artifact_outbox WHERE receipt IS NULL AND permanent_failure IS NULL ORDER BY last_attempt, rowid LIMIT ?", (limit,)).fetchall()
             connection.executemany("UPDATE artifact_outbox SET last_attempt = ? WHERE id = ?", [(time.time(), row[0]) for row in rows])
             return rows
 
     def publication_count(self):
         with self.connect() as connection:
-            return connection.execute("SELECT count(*) FROM artifact_outbox WHERE receipt IS NULL").fetchone()[0]
+            return connection.execute("SELECT count(*) FROM artifact_outbox WHERE receipt IS NULL AND permanent_failure IS NULL").fetchone()[0]
 
     def record_publication(self, request_id, receipt):
         with self.connect() as connection:
             connection.execute("UPDATE artifact_outbox SET receipt = ? WHERE id = ? AND receipt IS NULL", (json.dumps(receipt), request_id))
+
+    def record_publication_failure(self, request_id, reason):
+        """Stop retrying a row the backend has permanently rejected (e.g. a malformed
+        scope/envelope) — unlike a 401/404/5xx, a 400 here can never succeed on retry."""
+        with self.connect() as connection:
+            connection.execute("UPDATE artifact_outbox SET permanent_failure = ? WHERE id = ? AND receipt IS NULL", (reason[:500], request_id))
 
     def get(self, request_id, role):
         with self.connect() as connection:

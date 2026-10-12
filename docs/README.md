@@ -6,14 +6,9 @@ Welcome to the Ultimate QA Agent documentation. This folder contains comprehensi
 
 ### Takeover Review and Delivery
 
-- [Conversational agent platform plan](./conversational-agent-platform-plan.md): phased design for native chat, Slack/Teams integrations, meetings, voice, and parallel agent work.
 - [Chat and text integrations](./chat-and-text-integrations.md): native personal/group chats, named agents, scoped tasks, Slack/Teams bot setup, response/delivery behavior and verification.
 - [Meetings](./meetings.md): native video-call pilot, note-taking/active modes, Teams/Meet adapter, consent, deployment and remaining provider/voice gates.
 - [Live meeting voice](./live-meeting-voice.md): GPT-Live participation, native audio relay, Teams/Meet media bridge, security controls and real-provider rollout gates.
-- [Native call verification](./native-call-verification.md): audio fixes, speaking indicators, compact lobby, automatic final notes, browser regression coverage, and a real GPT-Live call result.
-- [Platform audit](./platform-audit.md): implementation findings, priorities, premature scope and missing foundations.
-- [Implementation log](./implementation-log.md): delivered changes, verification and outstanding work.
-- [Delivery design](./platform-delivery-design.md): proposed pipeline, evidence and QAE/AUE harness contracts.
 - [Durable sync pipeline](./durable-sync-pipeline.md): implemented recovery, cancellation, publication and migration runbook.
 - [Extraction accuracy and evidence](./extraction-evidence.md): grounded proposals, coverage limits, budgets and reproducible evaluation.
 - [Extraction coverage v2](./extraction-coverage-v2.md): current section-aware workflow/scenario extraction, field citations and expanded regression corpus.
@@ -26,14 +21,13 @@ Welcome to the Ultimate QA Agent documentation. This folder contains comprehensi
 - [Repository execution and data preparation](qa-repository-execution.md): bounded C2 workers, fixture lifecycle, current job reports and deployment.
 - [QA package roadmap](./qa-package-roadmap.md): planned delivery of core QA capabilities, deeper existing skills, and specialist packs, with dependencies and acceptance gates.
 - [Sandboxed browser execution](./sandboxed-browser-execution.md): authorized offline Chromium runs, immutable assertions, artifacts, recovery and rollout.
-- [Autonomy delivery ledger](./autonomy-delivery.md): five-workstream implementation status and remaining replacement-readiness gaps.
 - [Autonomy operations](./autonomy-operations.md): scoped onboarding, suites, read-only HTTPS workers, CI, evaluations, lockdown and recovery.
 - [Live workflows and accuracy](./live-workflows.md): isolated authenticated browser execution, namespaced mutations, durable cleanup/recovery and revision-bound project benchmarks.
 - [Settings and benchmark collection](./settings-benchmarks.md): scoped Settings UI, credential management, durable reviewed cohorts, resumable collection, evidence export and browser verification.
 - [Organization accounts and SSO](./organization-accounts.md): password accounts, email invitations, browser sessions, OIDC configuration and identity limits.
 - [Integrations and Pipelines](./integrations-and-pipelines.md): connection setup ownership, pipeline tabs, source details, data limits, and current view boundaries.
 
-The audit and implementation log qualify older readiness and performance claims in these docs. Treat unmeasured throughput, cost and confidence figures as unverified, not acceptance results.
+Treat unmeasured throughput, cost and confidence figures in these docs as unverified, not acceptance results.
 
 ### 📊 Database & Storage Architecture
 

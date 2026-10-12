@@ -1,6 +1,6 @@
 # Automation maintenance and release readiness
 
-Status: C4 implementation slice. `maintain_automation` (AUE) and `assess_release_readiness` (QAE) are wired through the existing agent, MCP, HTTP and CLI dispatchers. Both are read-dominant: `assess_release_readiness` never executes anything, and `maintain_automation` executes only a single reviewed repair patch inside the existing durable repository worker's disposable checkout. No acceptance scenarios have been run for this slice; see [progress handoff](qa-progress-handoff.md).
+Status: C4 implementation slice. `maintain_automation` (AUE) and `assess_release_readiness` (QAE) are wired through the existing agent, MCP, HTTP and CLI dispatchers. Both are read-dominant: `assess_release_readiness` never executes anything, and `maintain_automation` executes only a single reviewed repair patch inside the existing durable repository worker's disposable checkout. No acceptance scenarios have been run for this slice.
 
 ## `maintain_automation`
 

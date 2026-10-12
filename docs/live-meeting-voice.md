@@ -1,6 +1,6 @@
 # Live meeting participation
 
-**2026-10-04 native-call update:** See [native-call-verification.md](native-call-verification.md) for the direct-playback fix, compact lobby, audio-reactive avatars, automatic final notes, and successful bounded real GPT-Live verification. Older statements below about unverified native real-provider behavior describe the earlier rollout; Teams/Meet and cross-network pilots remain outstanding.
+**2026-10-04 native-call update:** direct-playback fix, compact lobby, audio-reactive avatars, automatic final notes, and successful bounded real GPT-Live verification landed. Older statements below about unverified native real-provider behavior describe the earlier rollout; Teams/Meet and cross-network pilots remain outstanding.
 
 ## Delivered implementation — 2026-10-03
 

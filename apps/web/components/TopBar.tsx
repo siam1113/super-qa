@@ -221,7 +221,7 @@ export function TopBar() {
           </> : <a role="menuitem" href="/login" className="mt-1 flex items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-elevated"><UserRound size={16} /> Sign in</a>}
         </div>
       </>, document.body)}
-      <StatusPanel open={statusOpen} onClose={closeStatus} />
+      {statusOpen && createPortal(<StatusPanel open={statusOpen} onClose={closeStatus} />, document.body)}
     </header>
   );
 }

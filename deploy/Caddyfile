@@ -7,6 +7,16 @@
 		reverse_proxy agents:8000
 	}
 
+	# Next.js-only wrapper routes (apps/web/app/api/...) that don't mirror a
+	# same-path NestJS route — they call a *different* backend path (health
+	# checks) or add a session-cookie gate of their own. Must be matched
+	# before the generic @api catch-all below, or Caddy sends them straight
+	# to the backend, which has no matching route and 404s.
+	@webapi path /api/status /api/admin/status
+	handle @webapi {
+		reverse_proxy web:3000
+	}
+
 	@api path /api/*
 	handle @api {
 		reverse_proxy api:4000

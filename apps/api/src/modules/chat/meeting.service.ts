@@ -13,6 +13,7 @@ import { MeetingProvider, meetingUrl } from './meeting.provider';
 import { VoiceService } from './voice.service';
 import { MeetingVoice } from './voice.entity';
 import { AgentsService } from '../agents/agents.service';
+import { QaProject } from '../autonomy/autonomy.entity';
 
 const EMPTY_NATIVE_CALL_TIMEOUT_MS = 60_000;
 const DAILY_MEETING_LIMIT = 1_000;
@@ -71,7 +72,8 @@ export class MeetingService {
   async list(actor: ChatActor, conversationId: string) {
     return this.chat.scoped(actor, async manager => {
       await this.chat.conversation(manager, actor, conversationId);
-      return { meetings: await manager.find(Meeting, { where: { conversationId, projectId: actor.projectId }, order: { createdAt: 'DESC' }, take: 20 }), externalConfigured: this.provider.configured(), liveConfigured: this.voice.configured(), slackSupported: false };
+      const project = await manager.findOneByOrFail(QaProject, { id: actor.projectId });
+      return { meetings: await manager.find(Meeting, { where: { conversationId, projectId: actor.projectId }, order: { createdAt: 'DESC' }, take: 20 }), externalConfigured: this.provider.configured(), liveConfigured: project.liveVoiceEnabled && this.voice.configured(), slackSupported: false };
     });
   }
 
@@ -90,6 +92,26 @@ export class MeetingService {
       const meeting = meetings[0] || null;
       const conversation = meeting ? conversations.find(item => item.id === meeting.conversationId) || null : null;
       return { meeting, conversation };
+    });
+  }
+
+  // Visibility only — join()/create() deliberately allow Super QA to be dispatched into
+  // several different calls concurrently (see the duplicate-join comment below), so this
+  // never blocks a new join. It just lets the user see what else the bot is already in
+  // across every conversation they belong to, and end any of those from one place.
+  async inProgress(actor: ChatActor) {
+    return this.chat.scopedRead(actor, async manager => {
+      const conversations = await manager.getRepository(ChatConversation).createQueryBuilder('conversation')
+        .select(['conversation.id', 'conversation.title'])
+        .where('conversation.projectId = :projectId', { projectId: actor.projectId })
+        .andWhere('conversation.memberIds @> :members::jsonb', { members: JSON.stringify([actor.memberId]) })
+        .getMany();
+      if (!conversations.length) return { meetings: [] };
+      const meetings = await manager.find(Meeting, {
+        where: { projectId: actor.projectId, conversationId: In(conversations.map(item => item.id)), stopped: false, status: In(['live', 'joining']) },
+        order: { createdAt: 'DESC' }, take: 20,
+      });
+      return { meetings: meetings.map(meeting => ({ ...meeting, conversationTitle: conversations.find(item => item.id === meeting.conversationId)?.title || '' })) };
     });
   }
 
@@ -135,7 +157,8 @@ export class MeetingService {
       if (active) throw new ConflictException(input.provider === 'native' ? 'This conversation already has an active or uncertain meeting' : 'Super QA is already joining or in this meeting');
       const agent = await manager.findOneByOrFail(ChatAgent, { id: input.agentId });
       const meeting = await manager.save(manager.create(Meeting, { projectId: actor.projectId, conversationId: conversation.id, createdBy: member.id, keyId: key.id, requestId: input.requestId, agentId: agent.id, participantMemberIds, agentParticipants, shareTranscriptWithAgents: input.shareTranscriptWithAgents ?? true, mode: input.mode, provider: input.provider, url, title: conversation.title, status: 'joining' }));
-      meeting.liveVoice = input.mode === 'active' && agentParticipants.length > 0 && this.voice.configured();
+      const project = await manager.findOneByOrFail(QaProject, { id: actor.projectId });
+      meeting.liveVoice = input.mode === 'active' && agentParticipants.length > 0 && project.liveVoiceEnabled && this.voice.configured();
       await manager.save(meeting);
       const voiceUrl = meeting.liveVoice && meeting.provider !== 'native' ? await this.voice.prepare(manager, meeting) : undefined;
       await this.chat.audit(manager, actor, 'meeting.created_with_consent', { meetingId: meeting.id, mode: meeting.mode, provider: meeting.provider });
@@ -149,8 +172,14 @@ export class MeetingService {
       await this.database.manager.update(Meeting, { id: reserved.meeting.id }, { botId: bot.id });
       const current = await this.database.manager.findOneByOrFail(Meeting, { id: reserved.meeting.id });
       if (current.stopped) { await this.provider.leave(bot.id); await this.database.manager.update(Meeting, current.id, { status: 'ended', error: null }); }
-    } catch {
-      await this.database.manager.update(Meeting, { id: reserved.meeting.id }, { status: 'uncertain', error: 'Join/removal outcome unknown. Check the provider dashboard before creating another bot.' });
+    } catch (error) {
+      // A ServiceUnavailableException here (e.g. a dead public tunnel) means we never even
+      // called Recall — the bot definitely was not created, unlike every other failure in
+      // this block, which is a genuinely ambiguous outcome ("don't blindly retry"). Surface
+      // the specific cause and leave this immediately retryable instead of parking it in
+      // 'uncertain', which exists to discourage retrying when a bot might actually be live.
+      if (error instanceof ServiceUnavailableException) await this.database.manager.update(Meeting, { id: reserved.meeting.id }, { status: 'ended', error: error.message });
+      else await this.database.manager.update(Meeting, { id: reserved.meeting.id }, { status: 'uncertain', error: 'Join/removal outcome unknown. Check the provider dashboard before creating another bot.' });
     }
     return this.database.manager.findOneByOrFail(Meeting, { id: reserved.meeting.id });
   }
@@ -549,5 +578,21 @@ export class MeetingService {
     const status = ['done', 'call_ended', 'fatal'].includes(code) ? 'ended' : code === 'in_call_recording' ? 'live' : 'joining';
     await this.database.manager.update(Meeting, { id, stopped: false }, status === 'ended' ? { status, stopped: true, version: meeting.version + 1 } : { status });
     return this.detail(actor, id);
+  }
+
+  // Unguarded, agent-runtime-facing reads (no ChatActor/session cookie — the Python
+  // agents runtime calls these directly). Scoped explicitly by the caller-supplied
+  // projectId rather than conversation membership, since an agent isn't a member of
+  // any conversation. Read-only: neither method can trigger note generation.
+  async agentListMeetings(projectId: string, limit = 10) {
+    const meetings = await this.database.manager.find(Meeting, { where: { projectId }, order: { createdAt: 'DESC' }, take: Math.min(Math.max(limit, 1), 50) });
+    return { meetings: meetings.map(meeting => ({ id: meeting.id, title: meeting.title, status: meeting.status, createdAt: meeting.createdAt })) };
+  }
+
+  async agentMeetingNotes(projectId: string, meetingId: string) {
+    const meeting = await this.database.manager.findOneBy(Meeting, { id: meetingId, projectId });
+    if (!meeting) throw new NotFoundException();
+    const run = await this.database.manager.findOne(MeetingRun, { where: { meetingId, kind: 'notes', status: 'done' }, order: { createdAt: 'DESC' } });
+    return { meetingTitle: meeting.title, notesAvailable: !!run?.result, summary: run?.result?.summary ?? null, items: run?.result?.items ?? [] };
   }
 }

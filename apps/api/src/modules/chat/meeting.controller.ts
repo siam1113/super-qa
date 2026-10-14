@@ -13,6 +13,7 @@ type MeetingRequest = Request & { chatActor: ChatActor };
 export class MeetingController {
   constructor(private readonly meetings: MeetingService) {}
   @Get('meetings/active') active(@Req() request: MeetingRequest) { return this.meetings.active(request.chatActor); }
+  @Get('meetings/in-progress') inProgress(@Req() request: MeetingRequest) { return this.meetings.inProgress(request.chatActor); }
   @Get('meetings/feed') feed(@Req() request: MeetingRequest) { return this.meetings.feed(request.chatActor); }
   @Get('conversations/:id/meetings') list(@Req() request: MeetingRequest, @Param('id', ParseUUIDPipe) id: string) { return this.meetings.list(request.chatActor, id); }
   @Post('meetings') create(@Req() request: MeetingRequest, @Body() body: MeetingDto) { return this.meetings.create(request.chatActor, body); }

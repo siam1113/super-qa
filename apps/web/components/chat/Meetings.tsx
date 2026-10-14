@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Bot, ClipboardList, Video } from 'lucide-react';
 import { Conversation, Directory, chatRequest } from '@/lib/chat';
-import { Meeting, MeetingDetail } from '@/lib/meetings';
+import { InProgressMeeting, Meeting, MeetingDetail } from '@/lib/meetings';
 import { CallSkeleton, ChatDialog, fieldClass, primaryClass, secondaryClass } from './ChatDialog';
 import { NativeCall } from './NativeCall';
 import { MeetingSummary } from './MeetingSummary';
@@ -32,6 +32,7 @@ export function Meetings({ conversation, directory, onClose, initialMeetingId = 
   const [showSummary, setShowSummary] = useState(false);
   const requestId = useRef(crypto.randomUUID()); const [pendingCreate, setPendingCreate] = useState<object | null>(null);
   const [externalUrl, setExternalUrl] = useState('');
+  const [inProgress, setInProgress] = useState<InProgressMeeting[]>([]);
   const canOperate = ['owner', 'admin'].includes(directory.me.role);
   const isGroup = conversation.kind === 'group';
   const initialStartHandled = useRef(false);
@@ -39,7 +40,8 @@ export function Meetings({ conversation, directory, onClose, initialMeetingId = 
   const refresh = useCallback(async () => {
     const id = selectedRef.current;
     if (id) { const next = await chatRequest<MeetingDetail>('/meetings/' + id); if (id === selectedRef.current) setDetail(next); }
-  }, []);
+    else if (externalStart) { const next = await chatRequest<{ meetings: InProgressMeeting[] }>('/meetings/in-progress'); if (!selectedRef.current) setInProgress(next.meetings); }
+  }, [externalStart]);
   useEffect(() => { let active = true; let polling = false; const poll = async () => { if (polling || !active) return; polling = true; try { await refresh(); } catch (failure) { if (active) { setError((failure as Error).message); setDetail(null); } } finally { polling = false; } }; void poll(); const events = new EventSource('/api/chat/events', { withCredentials: true }); events.addEventListener('change', poll); events.addEventListener('connected', poll); return () => { active = false; events.close(); window.speechSynthesis?.cancel(); }; }, [refresh]);
   useEffect(() => { setDetail(null); setSession(null); if (selected) void refresh().catch(failure => setError(failure.message)); }, [selected, refresh]);
   const action = async (task: () => Promise<unknown>) => { setBusy(true); setError(''); try { await task(); await refresh(); } catch (failure) { setError((failure as Error).message); } finally { setBusy(false); } };
@@ -76,6 +78,20 @@ export function Meetings({ conversation, directory, onClose, initialMeetingId = 
     {error && selected && <p role="alert" className="rounded-lg border border-warning/30 p-3 text-sm text-warning">{error}</p>}
     {!selected && externalStart ? <div className="space-y-4">
       <p className="text-sm text-text-secondary">Paste a Teams or Google Meet link to send Super QA into that call right now, instead of waiting for a scheduled invitation.</p>
+      {inProgress.length > 0 && <div className="space-y-2 rounded-xl border border-border bg-canvas p-3">
+        <p className="text-xs font-medium text-text-secondary">Super QA is already in {inProgress.length === 1 ? 'this call' : 'these calls'} — joining won’t stop them</p>
+        <div className="space-y-2">
+          {inProgress.map(item => <div key={item.id} className="flex items-center gap-3 rounded-lg border border-border bg-surface p-2.5 text-sm">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-elevated">{item.provider === 'native' ? <Video size={16} /> : <ProviderIcon provider={item.provider} size={16} />}</span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-medium text-text-primary">{item.conversationTitle || item.title || 'Meeting'}</p>
+              <p className="truncate text-xs text-text-secondary">{item.provider === 'native' ? 'Native call' : item.provider === 'teams' ? 'Microsoft Teams' : 'Google Meet'}</p>
+            </div>
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-canvas px-2 py-1 text-[10px] font-medium capitalize text-text-secondary"><span className={'h-1.5 w-1.5 rounded-full ' + (item.status === 'live' ? 'bg-success' : 'bg-accent-blue')} />{item.status}</span>
+            {item.createdBy === directory.me.id && <button type="button" disabled={busy} className={secondaryClass + ' shrink-0'} onClick={() => action(() => chatRequest('/meetings/' + item.id + '/end', {}))}>End</button>}
+          </div>)}
+        </div>
+      </div>}
       <div className="relative">
         <input aria-label="Meeting link" className={fieldClass + (detectedExternalProvider ? ' pr-10' : '')} value={externalUrl} onChange={event => setExternalUrl(event.target.value)} placeholder="https://teams.microsoft.com/l/meetup-join/…" />
         {detectedExternalProvider && <span className="absolute right-3 top-1/2 -translate-y-1/2" role="img" aria-label={detectedExternalProvider === 'teams' ? 'Microsoft Teams link detected' : 'Google Meet link detected'}><ProviderIcon provider={detectedExternalProvider} size={18} /></span>}

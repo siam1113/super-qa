@@ -378,6 +378,14 @@ export class AutonomyService {
     });
   }
 
+  async setLiveVoice(identity: ProjectKey, liveVoiceEnabled: boolean) {
+    return this.scoped(identity, ['owner', 'admin'], async (manager, project, key) => {
+      project.liveVoiceEnabled = liveVoiceEnabled; await manager.save(project);
+      await this.audit(manager, project.id, key.id, 'project.live_voice', { liveVoiceEnabled });
+      return { liveVoiceEnabled };
+    });
+  }
+
   private async validateBrowser(manager: EntityManager, project: QaProject, checks: AutonomousSuite['checks']) {
     for (const check of checks.filter(item => item.kind === 'api_flow')) apiProfile(check, project);
     for (const check of checks.filter(item => item.kind === 'repository')) await validateRepositoryCases(manager, project, repositoryProfile(check, project));

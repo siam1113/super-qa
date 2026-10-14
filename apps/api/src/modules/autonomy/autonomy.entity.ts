@@ -9,6 +9,7 @@ export class QaProject {
   @Column() applicationId: string;
   @Column() environment: string;
   @Column({ default: false }) paused: boolean;
+  @Column({ default: true }) liveVoiceEnabled: boolean;
   @Column({ type: 'jsonb' }) origins: string[];
   @Column({ type: 'jsonb' }) targets: string[];
   @Column({ type: 'jsonb' }) requirements: string[];

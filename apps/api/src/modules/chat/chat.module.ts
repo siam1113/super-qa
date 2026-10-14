@@ -7,6 +7,7 @@ import { chatEntities } from './chat.entity';
 import { ChatModel } from './chat.model';
 import { ChatService } from './chat.service';
 import { MeetingController, MeetingHookController } from './meeting.controller';
+import { AgentMeetingsController } from './agent-meetings.controller';
 import { meetingEntities } from './meeting.entity';
 import { MeetingService } from './meeting.service';
 import { MEETING_SERVICE } from './meeting.tokens';
@@ -60,5 +61,5 @@ class ChatWorker implements OnModuleInit, OnModuleDestroy {
   async onModuleDestroy() { this.stopped = true; this.wakeups.wake('chat_work_available'); if (this.maintenanceTimer) clearInterval(this.maintenanceTimer); await this.active; }
 }
 
-@Module({ imports: [AutonomyModule, AgentsModule, TypeOrmModule.forFeature([...chatEntities, ...meetingEntities, MeetingVoice])], controllers: [ChatController, ChatHookController, MeetingController, MeetingHookController, VoiceController, VoiceBridgeController, SuperQaVoiceController], providers: [ChatService, ChatConnectors, ChatModel, ChatGuard, ChatWorker, MeetingService, { provide: MEETING_SERVICE, useExisting: MeetingService }, MeetingModel, MeetingProvider, VoiceProvider, VoiceService, SuperQaVoiceService, ChatRealtimeService] })
+@Module({ imports: [AutonomyModule, AgentsModule, TypeOrmModule.forFeature([...chatEntities, ...meetingEntities, MeetingVoice])], controllers: [ChatController, ChatHookController, MeetingController, MeetingHookController, AgentMeetingsController, VoiceController, VoiceBridgeController, SuperQaVoiceController], providers: [ChatService, ChatConnectors, ChatModel, ChatGuard, ChatWorker, MeetingService, { provide: MEETING_SERVICE, useExisting: MeetingService }, MeetingModel, MeetingProvider, VoiceProvider, VoiceService, SuperQaVoiceService, ChatRealtimeService] })
 export class ChatModule {}

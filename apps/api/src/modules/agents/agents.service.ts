@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, HttpException, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { BadGatewayException, BadRequestException, ForbiddenException, HttpException, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { createHmac } from 'crypto';
 import { Readable } from 'node:stream';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -131,6 +131,18 @@ export class AgentsService {
       if (response.status === 403) throw new ForbiddenException('Start a new agent session for this app');
       if (response.status === 422) throw new BadRequestException('The agent request is invalid');
       if (response.status === 401) throw new ServiceUnavailableException('Agent context signing was rejected');
+      // The service was reachable and responded, just not successfully (e.g. a 500 from
+      // a bad LLM provider key or exhausted credits) — a real failure, not "unavailable".
+      // Surface it as an error rather than falling through to the canned dev-mode text,
+      // which would otherwise disguise a credential/billing problem as a cheerful reply.
+      let detail = '';
+      try {
+        const body = await response.json();
+        detail = typeof body?.detail === 'string' ? body.detail : JSON.stringify(body);
+      } catch {
+        detail = await response.text().catch(() => '');
+      }
+      throw new BadGatewayException(detail ? `Agent runtime error: ${detail.slice(0, 500)}` : 'Agent runtime returned an unexpected error');
     } catch (error) {
       if (error instanceof HttpException) throw error;
       this.logger.warn(`Agent service unavailable: ${error.message}`);

@@ -51,10 +51,27 @@ export class MeetingProvider {
     return response.status === 204 ? {} : response.json();
   }
 
+  // Recall's bot and OpenAI's Live API both run in the cloud and must reach these URLs
+  // over the public internet — a shape check on the env var (https, no path) can't catch
+  // a dead/expired tunnel (e.g. a Cloudflare quick tunnel). Without this, a dead tunnel
+  // fails completely silently: the bot still joins and posts its text intro via Recall's
+  // API directly, but the webhook/voice-bridge page it's supposed to reach never loads,
+  // so transcripts and live audio just never arrive — no error anywhere.
+  private async verifyPubliclyReachable(url: URL, label: string) {
+    try {
+      const response = await fetch(url, { method: 'GET', redirect: 'manual', signal: AbortSignal.timeout(6000) });
+      void response.body?.cancel?.();
+    } catch (error) {
+      throw new ServiceUnavailableException(label + ' is not publicly reachable (' + (error instanceof Error ? error.message : 'network error') + '). Its tunnel/public URL is likely dead — restart it and update the env var before dispatching Super QA.');
+    }
+  }
+
   async join(meeting: Meeting, name: string, role: string, voiceUrl?: string) {
     if (!this.configured()) throw new ServiceUnavailableException('External meeting provider is not configured');
     const origin = new URL(process.env.MEETING_PUBLIC_API_URL!);
     if (origin.protocol !== 'https:' || origin.username || origin.password || origin.search || origin.hash || origin.pathname !== '/') throw new ServiceUnavailableException('Configure a public HTTPS API origin');
+    await this.verifyPubliclyReachable(origin, 'MEETING_PUBLIC_API_URL');
+    if (voiceUrl) await this.verifyPubliclyReachable(new URL(voiceUrl), 'AUTH_PUBLIC_URL (live voice bridge)');
     return this.request('bot/', {
       meeting_url: meeting.url, bot_name: name + ' (' + role + ')',
       metadata: { superqa_meeting_id: meeting.id },

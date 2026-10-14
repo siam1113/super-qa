@@ -1408,6 +1408,235 @@ Would you like me to:
     return output
 
 
+# ============ Generate / Persist / Run / Report ============
+
+@tool
+async def generate_test_cases(
+    mode: Literal["instruction", "ticket", "exploration"],
+    instructions: Optional[str] = None,
+    document_id: Optional[str] = None,
+    count: Optional[int] = None,
+    environment_id: Optional[str] = None,
+    exploration_level: Optional[Literal["quick", "standard", "deep", "exhaustive"]] = None,
+    exploration_start_path: Optional[str] = None,
+) -> str:
+    """Propose new test cases — does NOT persist them; call create_test_case for any you want kept.
+
+    Three modes:
+    - "instruction": propose cases from a plain-language instructions string.
+    - "ticket": propose cases that verify a ticket (document_id) is implemented correctly.
+    - "exploration": actually crawl a live environment (environment_id required) with a real
+      browser-exploration run and propose cases only for what was observed there — this is
+      the real "explore the app" path, not a guess from catalogued flow names. exploration_level
+      controls how much time/budget the crawl spends; exploration_start_path is an optional
+      relative path (e.g. "/checkout") to start the crawl from instead of the environment's base URL.
+
+    Args:
+        mode: "instruction", "ticket", or "exploration"
+        instructions: Free-text focus (used for framing in "instruction" mode; also steers what
+            the crawl looks for in "exploration" mode)
+        document_id: Ticket/document UUID (required for "ticket" mode)
+        count: Exact number of cases to propose; omit to let the model decide (typically 1-8)
+        environment_id: Environment UUID to crawl (required for "exploration" mode)
+        exploration_level: "quick", "standard", "deep", or "exhaustive" (exploration mode only)
+        exploration_start_path: Relative path to start the crawl from (exploration mode only)
+
+    Returns:
+        The proposed cases (title/steps/priority/risk/flow/tags), or why generation/exploration failed
+    """
+    body = {"mode": mode}
+    if instructions:
+        body["instructions"] = instructions
+    if document_id:
+        body["documentId"] = document_id
+    if count:
+        body["count"] = count
+    if environment_id:
+        body["environmentId"] = environment_id
+    if exploration_level:
+        body["explorationLevel"] = exploration_level
+    if exploration_start_path:
+        body["explorationStartPath"] = exploration_start_path
+    async with httpx.AsyncClient(timeout=180.0) as client:
+        try:
+            response = await client.post(f"{BACKEND_URL}/qa/test-cases/generate", json=body)
+        except Exception as error:
+            return f"❌ Error generating test cases: {error}"
+    if response.status_code >= 400:
+        try:
+            detail = response.json().get("message", response.text)
+        except Exception:
+            detail = response.text
+        return f"❌ Could not generate test cases: {detail}"
+    proposals = response.json().get("proposals", [])
+    if not proposals:
+        return "No test cases were proposed."
+    result = f"**{len(proposals)} proposed test case(s)** (not yet saved — use create_test_case to persist the ones you want):\n\n"
+    for proposal in proposals:
+        result += f"**{proposal.get('title')}** | Priority: {proposal.get('priority')} | Risk: {proposal.get('risk')} | Flow: {proposal.get('flow')}\n"
+        for i, step in enumerate(proposal.get("steps", [])):
+            result += f"  {i + 1}. {step.get('action')} → {step.get('expected')}\n"
+        if proposal.get("tags"):
+            result += f"  Tags: {', '.join(proposal['tags'])}\n"
+        result += "\n"
+    return result
+
+
+@tool
+async def create_test_case(
+    title: str,
+    steps: List[Dict[str, str]],
+    priority: Optional[Literal["P0", "P1", "P2", "P3"]] = None,
+    risk: Optional[Literal["low", "medium", "high", "critical"]] = None,
+    flow: Optional[str] = None,
+    tags: Optional[List[str]] = None,
+    preconditions: Optional[List[str]] = None,
+    automation: Optional[Literal["automated", "manual", "partial"]] = None,
+    category: Optional[Literal["smoke", "regression", "sanity", "functional", "integration", "exploratory", "performance", "security", "acceptance"]] = None,
+) -> str:
+    """Persist one test case as a real, reviewable row in Plan > Test Cases.
+
+    Use this to save a case proposed by generate_test_cases, or one written by hand.
+
+    Args:
+        title: Test case title
+        steps: List of {"action": ..., "expected": ...} dicts, at least one
+        priority: "P0"-"P3" (optional)
+        risk: "low", "medium", "high", or "critical" (optional)
+        flow: The feature area/flow this case belongs to (optional)
+        tags: Free-text tags (optional)
+        preconditions: Setup required before running the case (optional)
+        automation: "automated", "manual", or "partial" (optional)
+        category: Test category, e.g. "regression", "smoke" (optional)
+
+    Returns:
+        The created case's id, or why it was rejected
+    """
+    if not steps:
+        return "❌ At least one step is required."
+    body: Dict[str, Any] = {"title": title, "steps": steps}
+    for key, value in (("priority", priority), ("risk", risk), ("flow", flow), ("tags", tags), ("preconditions", preconditions), ("automation", automation), ("category", category)):
+        if value:
+            body[key] = value
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        try:
+            response = await client.post(f"{BACKEND_URL}/qa/test-cases", json=body)
+        except Exception as error:
+            return f"❌ Error creating test case: {error}"
+    if response.status_code >= 400:
+        try:
+            detail = response.json().get("message", response.text)
+        except Exception:
+            detail = response.text
+        return f"❌ Could not create test case: {detail}"
+    case = response.json()
+    return f"✅ Created test case **{case.get('title')}** (`{case.get('id')}`), review status: {case.get('reviewStatus')}"
+
+
+@tool
+async def run_test_case(test_id: str, environment: Optional[str] = None, browser: Optional[str] = None) -> str:
+    """Trigger a real agent-driven execution of one approved test case.
+
+    The case must already be reviewed and approved (see get_test_case's Review field) —
+    this submits the run and returns its run id; it does not wait for the result.
+    Call get_execution_report with that run id afterward to see the outcome.
+
+    Args:
+        test_id: The test case's UUID
+        environment: Environment label to run against (defaults to "staging")
+        browser: Browser to run in (defaults to "chromium")
+
+    Returns:
+        The submitted run's id, or why it was rejected
+    """
+    body = {}
+    if environment:
+        body["environment"] = environment
+    if browser:
+        body["browser"] = browser
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        try:
+            response = await client.post(f"{BACKEND_URL}/qa/test-cases/{test_id}/run-with-agent", json=body)
+        except Exception as error:
+            return f"❌ Error starting execution: {error}"
+    if response.status_code == 404:
+        return "❌ Test case not found."
+    if response.status_code >= 400:
+        try:
+            detail = response.json().get("message", response.text)
+        except Exception:
+            detail = response.text
+        return f"❌ Could not start execution: {detail}"
+    execution = response.json()
+    return f"✅ Execution started. Run id: `{execution.get('runId')}`. Call get_execution_report(run_id=\"{execution.get('runId')}\") to check on it."
+
+
+
+@tool
+async def get_coverage_report() -> str:
+    """See test coverage: catalogued flows vs. how many test cases cover each, plus
+    overall execution stats (pass/fail/blocked/running) and the self-healing backlog.
+
+    Returns:
+        A markdown coverage summary
+    """
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        try:
+            counts_resp = await client.get(f"{BACKEND_URL}/qa/context-counts")
+            dashboard_resp = await client.get(f"{BACKEND_URL}/qa/dashboard")
+        except Exception as error:
+            return f"❌ Error getting coverage report: {error}"
+    if counts_resp.status_code != 200 or dashboard_resp.status_code != 200:
+        return "❌ Failed to load coverage report."
+    counts = counts_resp.json()
+    dashboard = dashboard_resp.json()
+    stats = dashboard.get("stats", {})
+    result = "**Coverage report:**\n\n"
+    result += f"- Test cases: {counts.get('testCases', 0)} | Flows catalogued: {counts.get('flows', 0)} | Requirements: {counts.get('requirements', 0)} | Defects: {counts.get('defects', 0)}\n"
+    result += f"- Executions — passed: {stats.get('passed', 0)}, failed: {stats.get('failed', 0)}, blocked: {stats.get('blocked', 0)}, running: {stats.get('running', 0)}, pending: {stats.get('pending', 0)}\n"
+    result += f"- Self-healing: {stats.get('healingCount', 0)} total, {stats.get('healingPending', 0)} pending review\n\n"
+    top_risks = dashboard.get("topRisks", [])
+    if top_risks:
+        result += "**Top-risk cases with coverage:**\n"
+        for case in top_risks[:10]:
+            result += f"- {case.get('title')} (risk: {case.get('risk')}, priority: {case.get('priority')})\n"
+    return result
+
+
+@tool
+async def list_defects(query: Optional[str] = None) -> str:
+    """List known defects, optionally filtered by a free-text search.
+
+    Args:
+        query: Free-text search (optional — omit to list all catalogued defects)
+
+    Returns:
+        Matching defects
+    """
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        try:
+            if query:
+                response = await client.get(f"{BACKEND_URL}/business/search", params={"q": query, "types": "defect"})
+            else:
+                response = await client.get(f"{BACKEND_URL}/business/items/by-type/defect")
+        except Exception as error:
+            return f"❌ Error listing defects: {error}"
+    if response.status_code != 200:
+        return f"❌ Failed to list defects: {response.text}"
+    items = response.json()
+    if not items:
+        return "No defects found." if query else "No defects catalogued."
+    result = f"**{len(items)} defect(s):**\n\n"
+    for item in items[:20]:
+        result += f"🐛 **{item.get('name', 'Unnamed')}**"
+        if item.get("description"):
+            result += f" — {item['description'][:150]}"
+        result += "\n"
+    if len(items) > 20:
+        result += f"\n_...and {len(items) - 20} more_"
+    return result
+
+
 # ============ Tool Registration ============
 
 @tool
@@ -1445,6 +1674,8 @@ async def import_test_cases_to_plan(request_id: str) -> str:
 
 def create_qae_tools() -> list:
     """Register structured workflows; legacy helpers remain for existing callers."""
-    from shared.tools import retrieve_source_evidence, search_knowledge, get_platform_stats
+    from shared.tools import retrieve_source_evidence, search_knowledge, get_platform_stats, list_test_cases, get_test_case, create_task, queue_test_run, update_test_case, get_execution_report, list_meetings, get_meeting_notes
     from shared.skills.tools import create_skill_tools
-    return [retrieve_source_evidence, search_knowledge, get_platform_stats, import_test_cases_to_plan, *create_skill_tools("qae")]
+    return [retrieve_source_evidence, search_knowledge, get_platform_stats, list_test_cases, get_test_case, create_task, queue_test_run, import_test_cases_to_plan,
+            generate_test_cases, create_test_case, update_test_case, run_test_case, get_execution_report, get_coverage_report, list_defects,
+            list_meetings, get_meeting_notes, *create_skill_tools("qae")]

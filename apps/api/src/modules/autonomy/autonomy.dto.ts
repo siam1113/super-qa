@@ -74,6 +74,10 @@ export class PauseProjectDto {
   @IsBoolean() paused: boolean;
 }
 
+export class LiveVoiceSettingDto {
+  @IsBoolean() liveVoiceEnabled: boolean;
+}
+
 export class ApiObservationDto {
   @IsString() @Length(1, 100) checkId: string;
   @IsIn(['', 'network_error', 'policy_error', 'invalid_json', 'timeout', 'response_limit']) error: string;

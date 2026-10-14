@@ -128,6 +128,11 @@ export function SettingsPage({ embedded = false }: { embedded?: boolean }) {
             {!settings.project.paused && <label className="flex gap-2 text-sm"><input type="checkbox" checked={pauseConfirmed} onChange={event => setPauseConfirmed(event.target.checked)} />I understand active runs will be cancelled.</label>}
             <button className={buttonClass} disabled={busy || (!settings.project.paused && !pauseConfirmed)} onClick={() => void action(async () => { await request('/pause', { paused: !settings.project.paused }); setPauseConfirmed(false); await refresh(); })}>{settings.project.paused ? 'Resume app execution' : 'Pause app execution'}</button>
           </section>}
+          {canManageApp && <section className={panelClass + ' lg:col-span-2'}><h2 className="font-medium">Meeting voice</h2>
+            <p className="text-sm text-text-secondary">When on, "Active participant" meetings may speak aloud with live GPT-Live voice. When off, the agent still joins and contributes QA guidance, but only as meeting chat text — same as a silent note-taker. This also requires GPT-Live to be configured for this deployment.</p>
+            <span className={'inline-block rounded-full px-2 py-1 text-xs ' + (settings.project.liveVoiceEnabled ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning')}>{settings.project.liveVoiceEnabled ? 'Live voice enabled' : 'Live voice disabled'}</span>
+            <button className={buttonClass} disabled={busy} onClick={() => void action(async () => { await request('/live-voice', { liveVoiceEnabled: !settings.project.liveVoiceEnabled }); await refresh(); })}>{settings.project.liveVoiceEnabled ? 'Disable live voice' : 'Enable live voice'}</button>
+          </section>}
         </div>}
         {tab === 'access' && <section className={panelClass}><h2 className="text-lg font-medium">App credentials</h2><p className="text-sm text-text-secondary">Keys are scoped, expiring and individually revocable. Only owners can list or manage them.</p>
           {owner ? <><form className="grid gap-3 md:grid-cols-4" onSubmit={event => { event.preventDefault(); void action(async () => { const result = await request<{ secret: string }>('/keys', { role, label, days }); setIssued(result.secret); await refresh(); setLabel(''); }); }}>

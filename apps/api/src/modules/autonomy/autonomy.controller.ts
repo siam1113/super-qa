@@ -1,6 +1,6 @@
 import { Body, CanActivate, Controller, ExecutionContext, ForbiddenException, Get, Injectable, Param, ParseUUIDPipe, Post, Req, UseGuards, UsePipes, ValidationPipe } from '@nestjs/common';
 import { AutonomyService } from './autonomy.service';
-import { CleanupReceiptDto, CompleteAutonomousRunDto, CreateBenchmarkDto, CreateSuiteDto, EnrollProjectDto, IssueKeyDto, PauseProjectDto, ProjectSettingsDto, StartAutonomousRunDto } from './autonomy.dto';
+import { CleanupReceiptDto, CompleteAutonomousRunDto, CreateBenchmarkDto, CreateSuiteDto, EnrollProjectDto, IssueKeyDto, LiveVoiceSettingDto, PauseProjectDto, ProjectSettingsDto, StartAutonomousRunDto } from './autonomy.dto';
 import { ProjectKey } from './autonomy.entity';
 import { IsUUID } from 'class-validator';
 
@@ -53,6 +53,7 @@ export class AutonomyController {
   @Post('keys') issue(@Req() request: { projectKey: ProjectKey }, @Body() input: IssueKeyDto) { return this.service.issueKey(request.projectKey, input); }
   @Post('keys/:id/revoke') revoke(@Req() request: { projectKey: ProjectKey }, @Param('id', ParseUUIDPipe) id: string) { return this.service.revoke(request.projectKey, id); }
   @Post('pause') pause(@Req() request: { projectKey: ProjectKey }, @Body() input: PauseProjectDto) { return this.service.pause(request.projectKey, input.paused); }
+  @Post('live-voice') setLiveVoice(@Req() request: { projectKey: ProjectKey }, @Body() input: LiveVoiceSettingDto) { return this.service.setLiveVoice(request.projectKey, input.liveVoiceEnabled); }
   @Post('suites') createSuite(@Req() request: { projectKey: ProjectKey }, @Body() input: CreateSuiteDto) { return this.service.createSuite(request.projectKey, input); }
   @Post('suites/:id/approve') approve(@Req() request: { projectKey: ProjectKey }, @Param('id', ParseUUIDPipe) id: string) { return this.service.approve(request.projectKey, id); }
   @Post('runs') start(@Req() request: { projectKey: ProjectKey }, @Body() input: StartAutonomousRunDto) { return this.service.start(request.projectKey, input); }

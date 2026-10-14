@@ -4,6 +4,8 @@ import json
 import httpx
 from langchain_core.tools import tool
 from typing import Literal
+from shared.tools import list_test_cases, get_test_case, create_task, queue_test_run, retrieve_source_evidence, update_test_case, get_execution_report, list_meetings, get_meeting_notes
+from qae.tools import generate_test_cases, create_test_case, run_test_case, get_coverage_report, list_defects
 
 BACKEND_URL = os.getenv("BACKEND_API_URL", "http://localhost:4000/api")
 # Self-referential base URL for this same FastAPI process, so SuperQA can hold a real
@@ -146,47 +148,6 @@ async def list_agent_sessions(agent_type: Literal["qae", "aue", "all"] = "all") 
 
 
 # ============ Task Management Tools ============
-
-@tool
-async def create_task(
-    title: str,
-    agent_type: Literal["qae", "aue"],
-    description: str = "",
-    priority: Literal["urgent", "high", "medium", "low"] = "medium",
-    labels: str = "",
-) -> str:
-    """Create a new task for an agent.
-
-    Args:
-        title: The task title
-        agent_type: Which agent to assign - 'qae' for QA Engineer, 'aue' for Automation Engineer
-        description: Optional task description
-        priority: Task priority - urgent, high, medium, or low
-        labels: Comma-separated labels (e.g., "regression,api,critical")
-
-    Returns:
-        Confirmation message with task details
-    """
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        try:
-            label_list = [l.strip() for l in labels.split(",") if l.strip()] if labels else []
-            response = await client.post(
-                f"{BACKEND_URL}/agents/{agent_type}/tasks",
-                json={
-                    "title": title,
-                    "description": description or None,
-                    "priority": priority,
-                    "labels": label_list,
-                },
-            )
-            if response.status_code in (200, 201):
-                task = response.json()
-                agent_name = "QA Engineer" if agent_type == "qae" else "Automation Engineer"
-                return f"✅ Task created successfully!\n\n**Task:** {task.get('title')}\n**Agent:** {agent_name}\n**Priority:** {priority}\n**ID:** {task.get('id')}"
-            return f"❌ Failed to create task: {response.text}"
-        except Exception as e:
-            return f"❌ Error creating task: {str(e)}"
-
 
 @tool
 async def list_tasks(
@@ -791,8 +752,23 @@ def create_superqa_tools() -> list:
         list_environments,
         create_environment,
         add_environment_variable,
+        # Test Cases
+        list_test_cases,
+        get_test_case,
+        queue_test_run,
+        generate_test_cases,
+        create_test_case,
+        update_test_case,
+        run_test_case,
+        get_execution_report,
+        get_coverage_report,
+        list_defects,
+        # Meetings
+        list_meetings,
+        get_meeting_notes,
         # Knowledge
         search_knowledge,
+        retrieve_source_evidence,
         get_platform_stats,
         get_help,
         # QAE + AUE's own job-status/resource-discovery tools, role-prefixed

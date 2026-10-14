@@ -187,6 +187,8 @@ def message_text(message) -> str:
     """Plain display text for a message whose .content may be a string or, for Responses-API
     style models, a list of content blocks (reasoning/function_call/text) mixed together."""
     text = getattr(message, "text", None)
+    if callable(text):
+        text = text()
     if text is not None:
         return str(text)
     content = getattr(message, "content", None)

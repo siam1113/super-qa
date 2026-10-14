@@ -6,6 +6,7 @@ Welcome to the Ultimate QA Agent documentation. This folder contains comprehensi
 
 ### Takeover Review and Delivery
 
+- [Agent capabilities and pipeline internals](./agent-capabilities.md): what QAE/AUE/Super QA can actually do (real tool lists), the text-chat and voice/meeting-delegation flows end to end, and known drift between the three places tool lists are described.
 - [Conversational agent platform plan](./conversational-agent-platform-plan.md): phased design for native chat, Slack/Teams integrations, meetings, voice, and parallel agent work.
 - [Chat and text integrations](./chat-and-text-integrations.md): native personal/group chats, named agents, scoped tasks, Slack/Teams bot setup, response/delivery behavior and verification.
 - [Meetings](./meetings.md): native video-call pilot, note-taking/active modes, Teams/Meet adapter, consent, deployment and remaining provider/voice gates.

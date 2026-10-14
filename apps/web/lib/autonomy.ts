@@ -1,5 +1,5 @@
 export type ProjectSettings = {
-  project: { id: string; name: string; workspaceId: string; applicationId: string; environment: string; paused: boolean; dailyRunLimit: number; origins: string[]; targets: string[]; requirements: string[] };
+  project: { id: string; name: string; workspaceId: string; applicationId: string; environment: string; paused: boolean; liveVoiceEnabled: boolean; dailyRunLimit: number; origins: string[]; targets: string[]; requirements: string[] };
   identity: { id: string; role: string; expiresAt: string };
   credentials: Array<{ id: string; role: string; label: string; expiresAt: string; revoked: boolean }>;
   liveProfiles: Array<{ hash: string; origin: string; environment: string; assertions: string[] }>;

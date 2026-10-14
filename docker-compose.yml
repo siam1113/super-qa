@@ -2,6 +2,7 @@ services:
   postgres:
     image: pgvector/pgvector:pg16
     container_name: qa-agent-db
+    restart: unless-stopped
     environment:
       POSTGRES_USER: qaagent
       POSTGRES_PASSWORD: qaagent123
@@ -20,6 +21,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: qa-agent-redis
+    restart: unless-stopped
     ports:
       - "6379:6379"
     volumes:
@@ -48,6 +50,32 @@ services:
     command: server -dir=/data -s3 -s3.port=9000 -s3.config=/etc/seaweedfs/s3-config.json
     healthcheck:
       test: ["CMD-SHELL", "curl -s -o /dev/null -w '%{http_code}' http://localhost:9000/ | grep -qE '^(200|403)$'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # QAE/AUE/SuperQA FastAPI service. apps/api and apps/web run on the host (not in
+  # compose), so BACKEND_API_URL below points back out via host.docker.internal
+  # rather than the agents/.env default of localhost, which inside this container
+  # would mean "this container" instead of the host's apps/api.
+  agents:
+    build:
+      context: .
+      dockerfile: agents/Dockerfile
+    container_name: qa-agent-agents
+    restart: unless-stopped
+    env_file:
+      - ./agents/.env
+    environment:
+      REDIS_URL: redis://redis:6379
+      BACKEND_API_URL: http://host.docker.internal:4000/api
+    ports:
+      - "8010:8010"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8010/health')"]
       interval: 10s
       timeout: 5s
       retries: 5

@@ -12,7 +12,7 @@ async function forward(request: NextRequest, context: { params: { path?: string[
   if (query.size && (path !== '/oidc/callback' || [...query.keys()].some(key => !['code', 'state', 'error', 'error_description'].includes(key)))) return NextResponse.json({ message: 'Unsupported auth query' }, { status: 400, headers });
   try {
     const base = new URL(process.env.AUTONOMY_API_URL || 'http://localhost:4000/api');
-    if ((base.protocol !== 'https:' && !(base.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(base.hostname))) || base.username || base.password || base.search || base.hash || !/^\/api\/?$/.test(base.pathname)) throw new Error();
+    if (!['http:', 'https:'].includes(base.protocol) || base.username || base.password || base.search || base.hash || !/^\/api\/?$/.test(base.pathname)) throw new Error();
     let body: string | undefined;
     if (request.method === 'POST' || request.method === 'PATCH') {
       const reader = request.body?.getReader(); const chunks: Uint8Array[] = []; let length = 0;

@@ -11,8 +11,7 @@ export async function GET(request: NextRequest) {
   let base: URL;
   try {
     base = new URL(process.env.AUTONOMY_API_URL || 'http://localhost:4000/api');
-    const localHttp = base.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(base.hostname);
-    if ((!localHttp && base.protocol !== 'https:') || base.username || base.password || base.search || base.hash || !/^\/api\/?$/.test(base.pathname)) throw new Error();
+    if (!['http:', 'https:'].includes(base.protocol) || base.username || base.password || base.search || base.hash || !/^\/api\/?$/.test(base.pathname)) throw new Error();
   } catch {
     return NextResponse.json({ message: 'Service status is unavailable.' }, { status: 503, headers: privateHeaders });
   }

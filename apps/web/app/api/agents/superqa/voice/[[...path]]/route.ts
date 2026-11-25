@@ -10,7 +10,7 @@ async function forward(request: NextRequest, context: { params: { path?: string[
   if (!session) return NextResponse.json({ message: 'Sign in to your app to use Super QA voice' }, { status: 401, headers });
   try {
     const base = new URL(process.env.AUTONOMY_API_URL || 'http://localhost:4000/api');
-    if ((base.protocol !== 'https:' && !(base.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(base.hostname))) || base.username || base.password || base.search || base.hash || !/^\/api\/?$/.test(base.pathname)) throw new Error('Invalid API configuration');
+    if (!['http:', 'https:'].includes(base.protocol) || base.username || base.password || base.search || base.hash || !/^\/api\/?$/.test(base.pathname)) throw new Error('Invalid API configuration');
     const body = await request.text();
     if (new TextEncoder().encode(body).length > 65536) return NextResponse.json({ message: 'Request too large' }, { status: 413, headers });
     const response = await fetch(`${base.origin}/api/agents/superqa/voice${path}`, {

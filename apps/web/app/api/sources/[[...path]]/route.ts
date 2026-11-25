@@ -5,8 +5,7 @@ export const dynamic = 'force-dynamic';
 function upstreamBase() {
   const base = process.env.AUTONOMY_API_URL || `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/api`;
   const url = new URL(base);
-  const localHttp = url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
-  if ((!localHttp && url.protocol !== 'https:') || url.username || url.password || url.search || url.hash || !/^\/api\/?$/.test(url.pathname)) throw new Error('Invalid API configuration');
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash || !/^\/api\/?$/.test(url.pathname)) throw new Error('Invalid API configuration');
   return url;
 }
 

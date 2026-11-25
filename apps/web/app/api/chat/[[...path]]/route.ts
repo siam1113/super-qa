@@ -43,7 +43,7 @@ async function forward(request: NextRequest, context: { params: { path?: string[
   if (['POST', 'PATCH', 'DELETE'].includes(request.method) && origin && origin !== expectedOrigin.replace(/\/$/, '')) return NextResponse.json({ message: 'Invalid origin' }, { status: 403, headers });
   try {
     const base = new URL(process.env.AUTONOMY_API_URL || 'http://localhost:4000/api');
-    if ((base.protocol !== 'https:' && !(base.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(base.hostname))) || base.username || base.password || base.search || base.hash || !/^\/api\/?$/.test(base.pathname)) throw new Error('Invalid API configuration');
+    if (!['http:', 'https:'].includes(base.protocol) || base.username || base.password || base.search || base.hash || !/^\/api\/?$/.test(base.pathname)) throw new Error('Invalid API configuration');
     let body: string | undefined;
     if (['POST', 'PATCH', 'PUT'].includes(request.method)) {
       body = await request.text();

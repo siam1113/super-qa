@@ -12,7 +12,7 @@ async function forward(request: NextRequest, context: { params: { path?: string[
   if (!/^Bearer sq_[a-f0-9]{64}$/.test(authorization) && !session) return NextResponse.json({ message: 'App credential or login required' }, { status: 401, headers });
   try {
     const base = new URL(process.env.AUTONOMY_API_URL || 'http://localhost:4000/api');
-    if ((base.protocol !== 'https:' && !(base.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(base.hostname))) || base.username || base.password || base.search || base.hash || !/^\/api\/?$/.test(base.pathname)) throw new Error('Invalid control plane configuration');
+    if (!['http:', 'https:'].includes(base.protocol) || base.username || base.password || base.search || base.hash || !/^\/api\/?$/.test(base.pathname)) throw new Error('Invalid control plane configuration');
     let body: string | undefined;
     if (request.method === 'POST') {
       const reader = request.body?.getReader();
